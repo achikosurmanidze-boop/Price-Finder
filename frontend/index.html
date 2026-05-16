@@ -9,255 +9,234 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
-    @keyframes shimmer { 0%{background-position:-800px 0} 100%{background-position:800px 0} }
-    .skeleton { background:linear-gradient(90deg,#e0e0e0 25%,#f0f0f0 50%,#e0e0e0 75%); background-size:800px 100%; animation:shimmer 1.5s infinite; }
-    .card-hover { transition:transform .2s,box-shadow .2s; }
-    .card-hover:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,.12); }
-    input:focus,textarea:focus { outline:none; }
-    @keyframes slide-in { from{transform:translateX(100%);opacity:0} to{transform:translateX(0);opacity:1} }
-    .slide-in { animation:slide-in .3s ease; }
-    @keyframes bounce-in { 0%{transform:scale(.8);opacity:0} 100%{transform:scale(1);opacity:1} }
-    .bounce-in { animation:bounce-in .25s ease; }
-    ::-webkit-scrollbar { width:6px; }
-    ::-webkit-scrollbar-thumb { background:#ccc; border-radius:3px; }
-
-    @keyframes progress-fill { from{width:0%} to{width:var(--target-width)} }
-    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
-    .pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
-    @keyframes spin { to{transform:rotate(360deg)} }
-    .spin { animation: spin 1s linear infinite; }
+    @keyframes shimmer{0%{background-position:-800px 0}100%{background-position:800px 0}}
+    .skeleton{background:linear-gradient(90deg,#e8e8e8 25%,#f5f5f5 50%,#e8e8e8 75%);background-size:800px 100%;animation:shimmer 1.5s infinite}
+    .card-hover{transition:transform .2s,box-shadow .2s}
+    .card-hover:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.13)}
+    input:focus,textarea:focus{outline:none}
+    @keyframes slide-in{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+    .slide-in{animation:slide-in .3s ease}
+    @keyframes fade-up{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+    .fade-up{animation:fade-up .35s ease}
+    @keyframes bounce-in{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
+    .bounce-in{animation:bounce-in .25s ease}
+    @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.75)}}
+    .pulse-dot{animation:pulse-dot 1.2s ease-in-out infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spin{animation:spin 1s linear infinite}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:4px}
+    ::-webkit-scrollbar-track{background:transparent}
+    /* Desktop sidebar scroll independent */
+    .sidebar-scroll{height:calc(100vh - 64px);overflow-y:auto;position:sticky;top:64px}
   </style>
-  <script>tailwind.config={theme:{extend:{colors:{primary:'#2D6A4F',accent:'#E63946'}}}}</script>
+  <script>
+    tailwind.config={theme:{extend:{colors:{primary:'#1B4332',accent:'#E63946',mid:'#2D6A4F',light:'#52b788'}}}}
+  </script>
 </head>
-<body class="bg-gray-50">
+<body class="bg-slate-50 antialiased">
 <div id="root"></div>
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
-// Auto-detect: if opened via Railway/server use same origin, else localhost
-const API = (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+
+const API = (window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1")
   ? "http://localhost:8000"
   : window.location.origin;
 
-// ── Utils ──────────────────────────────────────────────────────────────────
-const fmt = p => p != null ? `${Number(p).toFixed(2)} ₾` : "—";
+const fmt = p => p!=null ? `${Number(p).toFixed(2)} ₾` : "—";
 
-function wa(product) {
-  const t = `🛒 ${product.product_name}\n💰 ${fmt(product.current_price)}\n🏪 ${product.store_name}\n🔗 ${product.product_url}`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(t)}`, "_blank");
+function wa(product){
+  const t=`🛒 ${product.product_name}\n💰 ${fmt(product.current_price)}\n🏪 ${product.store_name}\n🔗 ${product.product_url}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(t)}`,"_blank");
 }
 
-async function api(path, opts = {}) {
-  // Hard timeout: 25s for search, 35s for basket — after that show error
-  const timeoutMs = path.includes("basket") ? 35000 : 25000;
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const r = await fetch(`${API}${path}`, {
-      headers: {"Content-Type": "application/json"},
-      signal: controller.signal,
-      ...opts,
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
+async function api(path, opts={}){
+  const timeoutMs=path.includes("basket")?35000:25000;
+  const controller=new AbortController();
+  const tid=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const r=await fetch(`${API}${path}`,{
+      headers:{"Content-Type":"application/json"},
+      signal:controller.signal,...opts,
+      body:opts.body?JSON.stringify(opts.body):undefined,
     });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error||`HTTP ${r.status}`);
     return r.json();
-  } catch (e) {
-    if (e.name === "AbortError") throw new Error("მოთხოვნა ძალიან დიდხანს გაგრძელდა. სერვერი შეამოწმე.");
+  }catch(e){
+    if(e.name==="AbortError") throw new Error("მოთხოვნა ძალიან დიდხანს გაგრძელდა.");
     throw e;
-  } finally {
-    clearTimeout(tid);
+  }finally{ clearTimeout(tid); }
+}
+
+function requestNotifications(){
+  if("Notification" in window&&Notification.permission==="default") Notification.requestPermission();
+}
+function sendNotification(title,body,url){
+  if(Notification.permission==="granted"){
+    const n=new Notification(title,{body,icon:"🛒"});
+    if(url) n.onclick=()=>window.open(url,"_blank");
   }
 }
 
-function requestNotifications() {
-  if ("Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-}
-
-function sendNotification(title, body, url) {
-  if (Notification.permission === "granted") {
-    const n = new Notification(title, { body, icon: "🛒" });
-    if (url) n.onclick = () => window.open(url, "_blank");
-  }
-}
-
-// ── Progress Indicator ─────────────────────────────────────────────────────
-const STORES = ["Carrefour","Spar","Nikora","Smart","Goodwill","GPC","Aversi","PSP","Ili"];
-
-const SEARCH_STEPS = [
-  { at: 0,  label: "ვუკავშირდებით მაღაზიებს...",       phase: "scraping" },
-  { at: 30, label: "ვაგროვებთ ფასებს...",               phase: "scraping" },
-  { at: 55, label: "AI ადარებს შედეგებს...",            phase: "ai"       },
-  { at: 78, label: "AI ამზადებს რეზიუმეს...",           phase: "ai"       },
-  { at: 92, label: "თითქმის დასრულდა...",               phase: "done"     },
+// ── Progress ───────────────────────────────────────────────────────────────
+const STORES=["Carrefour","Spar","Nikora","Smart","Goodwill","GPC","Aversi","PSP","Ili"];
+const SEARCH_STEPS=[
+  {at:0, label:"ვუკავშირდებით მაღაზიებს..."},
+  {at:30,label:"ვაგროვებთ ფასებს..."},
+  {at:55,label:"AI ადარებს შედეგებს..."},
+  {at:78,label:"AI ამზადებს რეზიუმეს..."},
+  {at:92,label:"თითქმის დასრულდა..."},
+];
+const BASKET_STEPS=[
+  {at:0, label:"ყველა პროდუქტს ყველა მაღაზიაში ვეძებთ..."},
+  {at:35,label:"ვაგროვებთ ფასებს..."},
+  {at:60,label:"AI ადარებს კალათებს..."},
+  {at:82,label:"AI ანგარიშობს საუკეთესო სტრატეგიას..."},
+  {at:94,label:"თითქმის მზადაა..."},
 ];
 
-const BASKET_STEPS = [
-  { at: 0,  label: "ყველა პროდუქტს ყველა მაღაზიაში ვეძებთ..." },
-  { at: 35, label: "ვაგროვებთ ფასებს..." },
-  { at: 60, label: "AI ადარებს კალათებს..." },
-  { at: 82, label: "AI ანგარიშობს საუკეთესო სტრატეგიას..." },
-  { at: 94, label: "თითქმის მზადაა..." },
-];
-
-function useElapsedProgress(loading, totalMs = 16000) {
-  const [pct, setPct] = useState(0);
-  const start = useRef(null);
-  const raf   = useRef(null);
-
-  useEffect(() => {
-    if (!loading) { setPct(0); start.current = null; return; }
-    start.current = performance.now();
-    const tick = () => {
-      const elapsed = performance.now() - start.current;
-      // Eased progress: approaches 96% asymptotically so it never "finishes" early
-      const raw = Math.min(elapsed / totalMs, 1);
-      const eased = 1 - Math.pow(1 - raw, 2.2);
-      setPct(Math.min(Math.floor(eased * 96), 96));
-      raf.current = requestAnimationFrame(tick);
+function useElapsedProgress(loading,totalMs=16000){
+  const [pct,setPct]=useState(0);
+  const start=useRef(null);
+  const raf=useRef(null);
+  useEffect(()=>{
+    if(!loading){setPct(0);start.current=null;return;}
+    start.current=performance.now();
+    const tick=()=>{
+      const elapsed=performance.now()-start.current;
+      const raw=Math.min(elapsed/totalMs,1);
+      const eased=1-Math.pow(1-raw,2.2);
+      setPct(Math.min(Math.floor(eased*96),96));
+      raf.current=requestAnimationFrame(tick);
     };
-    raf.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf.current);
-  }, [loading, totalMs]);
-
+    raf.current=requestAnimationFrame(tick);
+    return ()=>cancelAnimationFrame(raf.current);
+  },[loading,totalMs]);
   return pct;
 }
 
-function SearchProgress({ loading, isBasket }) {
-  const steps   = isBasket ? BASKET_STEPS : SEARCH_STEPS;
-  const totalMs = isBasket ? 20000 : 16000;
-  const pct     = useElapsedProgress(loading, totalMs);
-  if (!loading) return null;
-
-  const step = [...steps].reverse().find(s => pct >= s.at) || steps[0];
-
-  return (
-    <div className="mt-6 bg-white rounded-2xl shadow-md p-6">
-      {/* Store dots — light up randomly while scraping */}
-      <div className="flex flex-wrap justify-center gap-2 mb-5">
-        {STORES.map((store, i) => {
-          const lit = pct > 5 && pct < 56;
-          const delay = `${(i * 0.18).toFixed(2)}s`;
-          return (
-            <div key={store} className="flex flex-col items-center gap-1">
-              <div
-                className={`w-2.5 h-2.5 rounded-full transition-colors duration-500 ${lit ? 'bg-primary pulse-dot' : pct >= 56 ? 'bg-primary' : 'bg-gray-200'}`}
-                style={lit ? {animationDelay: delay} : {}}
-              />
+function SearchProgress({loading,isBasket}){
+  const steps=isBasket?BASKET_STEPS:SEARCH_STEPS;
+  const totalMs=isBasket?20000:16000;
+  const pct=useElapsedProgress(loading,totalMs);
+  if(!loading) return null;
+  const step=[...steps].reverse().find(s=>pct>=s.at)||steps[0];
+  return(
+    <div className="mt-6 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 fade-up">
+      <div className="flex flex-wrap justify-center gap-3 mb-5">
+        {STORES.map((store,i)=>{
+          const lit=pct>5&&pct<56;
+          return(
+            <div key={store} className="flex flex-col items-center gap-1.5">
+              <div className={`w-2.5 h-2.5 rounded-full transition-colors duration-500 ${lit?'bg-light pulse-dot':pct>=56?'bg-primary':'bg-gray-200'}`}
+                style={lit?{animationDelay:`${(i*.18).toFixed(2)}s`}:{}}/>
               <span className="text-xs text-gray-400 hidden sm:block">{store}</span>
             </div>
           );
         })}
       </div>
-
-      {/* Progress bar */}
-      <div className="w-full bg-gray-100 rounded-full h-2.5 mb-3 overflow-hidden">
-        <div
-          className="h-2.5 rounded-full transition-all duration-700 ease-out"
-          style={{
-            width: `${pct}%`,
-            background: pct < 55
-              ? 'linear-gradient(90deg, #2D6A4F, #52b788)'
-              : 'linear-gradient(90deg, #2D6A4F, #1a936f)',
-          }}
-        />
+      <div className="w-full bg-gray-100 rounded-full h-2 mb-3 overflow-hidden">
+        <div className="h-2 rounded-full transition-all duration-700 ease-out"
+          style={{width:`${pct}%`,background:pct<55?'linear-gradient(90deg,#1B4332,#52b788)':'linear-gradient(90deg,#1B4332,#2D6A4F)'}}/>
       </div>
-
-      {/* Status label */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600 font-medium flex items-center gap-2">
           <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full spin"/>
           {step.label}
         </p>
-        <span className="text-xs text-gray-400 font-mono">{pct}%</span>
+        <span className="text-xs text-gray-400 font-mono tabular-nums">{pct}%</span>
       </div>
-
-      {/* Phase hint */}
       <p className="text-xs text-gray-400 mt-2 text-center">
-        {pct < 55
-          ? `ყველა მაღაზია ერთდროულად — 9 სქრეიპერი პარალელურად`
-          : `Claude AI აანალიზებს შედეგებს...`}
+        {pct<55?"9 მაღაზია პარალელურად":"Claude AI აანალიზებს..."}
       </p>
     </div>
   );
 }
 
 // ── Skeleton ───────────────────────────────────────────────────────────────
-function Skel() {
-  return <div className="bg-white rounded-2xl shadow p-4 flex flex-col gap-3">
-    <div className="skeleton h-36 rounded-xl"/>
-    <div className="skeleton h-4 rounded w-3/4"/>
-    <div className="skeleton h-4 rounded w-1/2"/>
-    <div className="skeleton h-8 rounded w-1/3"/>
-  </div>;
+function Skel(){
+  return(
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-col gap-3">
+      <div className="skeleton h-40 rounded-xl"/>
+      <div className="skeleton h-3.5 rounded w-3/4"/>
+      <div className="skeleton h-3.5 rounded w-1/2"/>
+      <div className="skeleton h-8 rounded-xl w-1/3"/>
+    </div>
+  );
 }
 
-// ── Product Card ───────────────────────────────────────────────────────────
-function ProductCard({ product, rank, onAddToList, onSetAlert }) {
-  const cheapest = product.is_cheapest || rank === 0;
-  const disc = product.discount_percent > 0;
-  const [imgErr, setImgErr] = useState(false);
-  return (
-    <div className={`bg-white rounded-2xl shadow card-hover p-4 flex flex-col gap-3 relative border-2 ${cheapest?'border-primary':'border-transparent'}`}>
-      <div className="absolute top-3 left-3 flex flex-col gap-1 z-10">
-        {cheapest && <span className="bg-primary text-white text-xs font-bold px-2 py-1 rounded-full shadow">საუკეთესო ფასი ✓</span>}
-        {disc && <span className="bg-accent text-white text-xs font-bold px-2 py-1 rounded-full shadow">{product.discount_percent}% ფასდაკლება</span>}
+// ── Result Row (list view) ─────────────────────────────────────────────────
+function ResultRow({product,rank,onAddToList,onSetAlert}){
+  const cheapest=product.is_cheapest||rank===0;
+  const disc=product.discount_percent>0;
+  const [imgErr,setImgErr]=useState(false);
+  return(
+    <div className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 transition group ${cheapest?'bg-emerald-50':'hover:bg-slate-50'}`}>
+      {/* Thumbnail — desktop only */}
+      <div className="hidden sm:flex w-11 h-11 shrink-0 items-center justify-center bg-white rounded-xl border border-gray-100 overflow-hidden">
+        {product.image_url&&!imgErr
+          ?<img src={product.image_url} alt="" className="w-full h-full object-contain" onError={()=>setImgErr(true)}/>
+          :<span className="text-xl opacity-25">🛍️</span>}
       </div>
-      <div className="absolute top-3 right-3">
-        <span className="bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-1 rounded-full">{product.store_name}</span>
+
+      {/* Store badge */}
+      <div className="shrink-0 w-24 sm:w-28">
+        <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-lg ${cheapest?'bg-primary text-white':'bg-slate-100 text-slate-600'}`}>
+          {product.store_name}
+        </span>
+        {cheapest&&<p className="text-xs text-emerald-600 font-semibold mt-0.5 pl-0.5">✓ იაფი</p>}
       </div>
-      <div className="h-36 flex items-center justify-center bg-gray-50 rounded-xl mt-2 overflow-hidden">
-        {product.image_url && !imgErr
-          ? <img src={product.image_url} alt={product.product_name} className="h-full w-full object-contain" onError={()=>setImgErr(true)}/>
-          : <span className="text-5xl opacity-30">🛍️</span>}
+
+      {/* Product name */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-gray-800 line-clamp-2 leading-snug">{product.product_name}</p>
+        {disc&&<span className="text-xs text-accent font-semibold">-{product.discount_percent}% ფასდაკლება</span>}
+        {!product.in_stock&&<span className="text-xs text-gray-400 ml-2">• მარაგში არ არის</span>}
       </div>
-      <p className="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug">{product.product_name}</p>
-      <div className="flex items-baseline gap-2">
-        <span className={`text-2xl font-bold ${cheapest?'text-primary':'text-gray-900'}`}>{fmt(product.current_price)}</span>
-        {product.original_price && product.original_price !== product.current_price &&
-          <span className="text-sm text-gray-400 line-through">{fmt(product.original_price)}</span>}
+
+      {/* Price */}
+      <div className="shrink-0 text-right">
+        <p className={`text-lg font-bold tabular-nums leading-tight ${cheapest?'text-primary':'text-gray-800'}`}>{fmt(product.current_price)}</p>
+        {product.original_price&&product.original_price!==product.current_price&&
+          <p className="text-xs text-gray-400 line-through">{fmt(product.original_price)}</p>}
       </div>
-      {!product.in_stock && <span className="text-xs text-accent font-medium">მარაგში არ არის</span>}
-      <div className="flex gap-1.5 mt-auto pt-2 flex-wrap">
+
+      {/* Actions */}
+      <div className="shrink-0 flex items-center gap-1">
         <a href={product.product_url} target="_blank" rel="noopener noreferrer"
-           className="flex-1 text-center bg-primary text-white text-xs font-semibold py-2 rounded-xl hover:bg-opacity-90 transition min-w-[60px]">
+           className={`text-xs font-bold px-3 py-2 rounded-xl transition whitespace-nowrap ${cheapest?'bg-primary text-white hover:bg-mid':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
           ნახვა →
         </a>
-        <button onClick={()=>onAddToList(product)} title="სიაში დამატება"
-                className="px-2.5 py-2 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition text-sm">📋</button>
+        <button onClick={()=>onAddToList(product)} title="სიაში"
+          className="p-2 text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition opacity-0 group-hover:opacity-100">📋</button>
         <button onClick={()=>onSetAlert(product)} title="შეტყობინება"
-                className="px-2.5 py-2 bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 transition text-sm">🔔</button>
+          className="p-2 text-gray-300 hover:text-amber-500 hover:bg-amber-50 rounded-xl transition opacity-0 group-hover:opacity-100">🔔</button>
         <button onClick={()=>wa(product)} title="WhatsApp"
-                className="px-2.5 py-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition text-sm">📤</button>
+          className="hidden sm:block p-2 text-gray-300 hover:text-green-500 hover:bg-green-50 rounded-xl transition opacity-0 group-hover:opacity-100">📤</button>
       </div>
     </div>
   );
 }
 
-// ── Basket Analysis View ───────────────────────────────────────────────────
-function BasketView({ result, loading }) {
-  if (loading) return <SearchProgress loading={true} isBasket={true} />;
-  if (!result) return null;
-
-  const { per_item=[], basket_comparison=[], best_single_store, best_single_total, split_strategy=[], split_total, summary } = result;
-
-  return (
-    <div className="space-y-5 mt-4">
-      {summary && (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 text-sm text-green-800">
+// ── Basket View ────────────────────────────────────────────────────────────
+function BasketView({result}){
+  if(!result) return null;
+  const {per_item=[],basket_comparison=[],best_single_store,best_single_total,split_strategy=[],split_total,summary}=result;
+  return(
+    <div className="space-y-4 mt-4 fade-up">
+      {summary&&(
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-sm text-emerald-800">
           🤖 <strong>AI რეზიუმე:</strong> {summary}
         </div>
       )}
-
-      {/* Per-item cheapest */}
-      {per_item.length > 0 && (
-        <div className="bg-white rounded-2xl shadow p-4">
-          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+      {per_item.length>0&&(
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-base">
             <span className="text-xl">🏷️</span> ცალ-ცალკე ყველაზე იაფი
           </h3>
           <div className="space-y-3">
-            {per_item.map((item, i) => (
-              <div key={i} className="border border-gray-100 rounded-xl p-3">
+            {per_item.map((item,i)=>(
+              <div key={i} className="border border-gray-100 rounded-xl p-3 hover:border-gray-200 transition">
                 <div className="flex justify-between items-start flex-wrap gap-2">
                   <div>
                     <p className="font-semibold text-gray-800 text-sm">{item.item}</p>
@@ -265,17 +244,12 @@ function BasketView({ result, loading }) {
                   </div>
                   <div className="text-right">
                     <p className="text-lg font-bold text-primary">{fmt(item.cheapest_price)}</p>
-                    {item.cheapest_url && (
-                      <a href={item.cheapest_url} target="_blank" rel="noopener noreferrer"
-                         className="text-xs text-blue-500 hover:underline">ნახვა →</a>
-                    )}
+                    {item.cheapest_url&&<a href={item.cheapest_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">ნახვა →</a>}
                   </div>
                 </div>
-                {item.all_stores && item.all_stores.length > 1 && (
+                {item.all_stores&&item.all_stores.length>1&&(
                   <details className="mt-2">
-                    <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">
-                      სხვა მაღაზიები ({item.all_stores.length})
-                    </summary>
+                    <summary className="text-xs text-gray-400 cursor-pointer hover:text-gray-600">სხვა მაღაზიები ({item.all_stores.length})</summary>
                     <div className="mt-2 grid grid-cols-2 gap-1">
                       {item.all_stores.sort((a,b)=>(a.price||999)-(b.price||999)).map((s,j)=>(
                         <div key={j} className="flex justify-between text-xs bg-gray-50 rounded-lg px-2 py-1.5">
@@ -291,43 +265,37 @@ function BasketView({ result, loading }) {
           </div>
         </div>
       )}
-
-      {/* Basket comparison */}
-      {basket_comparison.length > 0 && (
-        <div className="bg-white rounded-2xl shadow p-4">
-          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
+      {basket_comparison.length>0&&(
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <h3 className="font-bold text-gray-800 mb-3 flex items-center gap-2 text-base">
             <span className="text-xl">🛒</span> კალათა ერთ მაღაზიაში
           </h3>
           <div className="space-y-2">
-            {basket_comparison.sort((a,b)=>(a.total||999)-(b.total||999)).map((s, i) => (
-              <div key={i} className={`flex items-center justify-between p-3 rounded-xl border-2 ${i===0?'border-primary bg-green-50':'border-gray-100'}`}>
+            {basket_comparison.sort((a,b)=>(a.total||999)-(b.total||999)).map((s,i)=>(
+              <div key={i} className={`flex items-center justify-between p-3 rounded-xl border-2 ${i===0?'border-primary bg-emerald-50':'border-gray-100'}`}>
                 <div>
                   <p className="font-semibold text-gray-800 text-sm flex items-center gap-1">
-                    {i===0 && <span className="text-green-600">✓</span>} {s.store}
+                    {i===0&&<span className="text-emerald-600">✓</span>} {s.store}
                   </p>
                   <p className="text-xs text-gray-400">{s.items_found}/{s.items_total} პროდუქტი</p>
                 </div>
                 <div className="text-right">
                   <p className={`text-lg font-bold ${i===0?'text-primary':'text-gray-700'}`}>{fmt(s.total)}</p>
-                  {s.savings_vs_max > 0 && (
-                    <p className="text-xs text-green-600">-{fmt(s.savings_vs_max)} დაზოგვა</p>
-                  )}
+                  {s.savings_vs_max>0&&<p className="text-xs text-emerald-600">-{fmt(s.savings_vs_max)}</p>}
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
-
-      {/* Split strategy */}
-      {split_strategy.length > 0 && split_total && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+      {split_strategy.length>0&&split_total&&(
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5">
           <h3 className="font-bold text-blue-800 mb-1 flex items-center gap-2">
-            <span className="text-xl">✂️</span> სმარტ სტრატეგია — სხვადასხვა მაღაზია
+            <span className="text-xl">✂️</span> სმარტ სტრატეგია
           </h3>
-          <p className="text-xs text-blue-600 mb-3">თუ ამ გეგმით იყიდი, <strong>{fmt(split_total)}</strong> გამოვა</p>
+          <p className="text-xs text-blue-600 mb-3">სხვადასხვა მაღაზიებში — სულ <strong>{fmt(split_total)}</strong></p>
           <div className="space-y-2">
-            {split_strategy.map((s, i) => (
+            {split_strategy.map((s,i)=>(
               <div key={i} className="bg-white rounded-xl p-3 flex justify-between items-start">
                 <div>
                   <p className="font-semibold text-sm text-gray-800">{s.store}</p>
@@ -337,10 +305,8 @@ function BasketView({ result, loading }) {
               </div>
             ))}
           </div>
-          {best_single_total && split_total < best_single_total && (
-            <p className="text-xs text-green-700 mt-3 font-medium">
-              🎉 ამ გეგმით {fmt(best_single_total - split_total)} დაზოგავ!
-            </p>
+          {best_single_total&&split_total<best_single_total&&(
+            <p className="text-xs text-emerald-700 mt-3 font-semibold">🎉 ამ გეგმით {fmt(best_single_total-split_total)} დაზოგავ!</p>
           )}
         </div>
       )}
@@ -348,348 +314,19 @@ function BasketView({ result, loading }) {
   );
 }
 
-// ── Shopping List Panel ────────────────────────────────────────────────────
-function ShoppingListPanel({ lists, onClose, onRefresh, onAnalyze }) {
-  const [activeList, setActiveList] = useState(null);
-  const [newListName, setNewListName] = useState("");
-  const [newItem, setNewItem] = useState("");
-  const [creating, setCreating] = useState(false);
-
-  useEffect(() => {
-    if (lists.length > 0 && !activeList) setActiveList(lists[0]);
-  }, [lists]);
-
-  const currentList = lists.find(l => l.id === activeList?.id);
-
-  const createList = async () => {
-    if (!newListName.trim()) return;
-    const r = await api("/api/lists", {method:"POST", body:{name:newListName}});
-    setNewListName(""); setCreating(false);
-    await onRefresh();
-    setActiveList({id: r.id});
-  };
-
-  const deleteList = async (id) => {
-    if (!confirm("სია წაიშლება. გრძელდება?")) return;
-    await api(`/api/lists/${id}`, {method:"DELETE"});
-    setActiveList(null);
-    onRefresh();
-  };
-
-  const addItem = async () => {
-    if (!newItem.trim() || !currentList) return;
-    await api(`/api/lists/${currentList.id}/items`, {method:"POST", body:{product_name:newItem}});
-    setNewItem("");
-    onRefresh();
-  };
-
-  const toggleItem = async (item, field) => {
-    await api(`/api/lists/${currentList.id}/items/${item.id}`, {
-      method:"PATCH", body:{[field]: !item[field]}
-    });
-    onRefresh();
-  };
-
-  const deleteItem = async (item) => {
-    await api(`/api/lists/${currentList.id}/items/${item.id}`, {method:"DELETE"});
-    onRefresh();
-  };
-
-  const uncheckedItems = currentList?.items?.filter(i=>!i.checked) || [];
-  const checkedItems = currentList?.items?.filter(i=>i.checked) || [];
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40" onClick={onClose}/>
-      <div className="w-full max-w-md bg-white h-full overflow-y-auto slide-in flex flex-col">
-        {/* Header */}
-        <div className="bg-primary text-white p-4 flex items-center justify-between sticky top-0 z-10">
-          <h2 className="font-bold text-lg">📋 საყიდლების სიები</h2>
-          <button onClick={onClose} className="text-white text-2xl leading-none hover:opacity-70">×</button>
-        </div>
-
-        {/* List selector */}
-        <div className="p-4 border-b bg-gray-50">
-          <div className="flex gap-2 flex-wrap">
-            {lists.map(l=>(
-              <button key={l.id} onClick={()=>setActiveList(l)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition ${activeList?.id===l.id?'bg-primary text-white':'bg-white border border-gray-200 text-gray-600 hover:border-primary'}`}>
-                {l.name}
-                <span className="ml-1 text-xs opacity-70">({l.items?.length||0})</span>
-              </button>
-            ))}
-            {creating
-              ? <div className="flex gap-1"><input value={newListName} onChange={e=>setNewListName(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&createList()} autoFocus placeholder="სიის სახელი"
-                  className="border rounded-full px-3 py-1 text-sm w-32 focus:ring-1 focus:ring-primary"/>
-                  <button onClick={createList} className="bg-primary text-white px-3 py-1 rounded-full text-sm">✓</button>
-                  <button onClick={()=>setCreating(false)} className="text-gray-400 px-2">✕</button>
-                </div>
-              : <button onClick={()=>setCreating(true)}
-                  className="px-3 py-1.5 rounded-full text-sm border border-dashed border-gray-300 text-gray-500 hover:border-primary hover:text-primary transition">
-                  + ახალი სია
-                </button>
-            }
-          </div>
-        </div>
-
-        {/* Active list */}
-        {currentList ? (
-          <div className="flex-1 flex flex-col">
-            {/* List actions */}
-            <div className="p-4 flex gap-2 border-b">
-              <button onClick={()=>onAnalyze(currentList.items.filter(i=>!i.checked).map(i=>i.product_name))}
-                disabled={uncheckedItems.length===0}
-                className="flex-1 bg-primary text-white text-sm font-semibold py-2 rounded-xl hover:bg-opacity-90 transition disabled:opacity-40">
-                🤖 ფასების ანალიზი
-              </button>
-              <button onClick={()=>deleteList(currentList.id)}
-                className="px-3 py-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition text-sm">🗑️</button>
-            </div>
-
-            {/* Add item */}
-            <div className="p-4 border-b">
-              <div className="flex gap-2">
-                <input value={newItem} onChange={e=>setNewItem(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&addItem()}
-                  placeholder="დაამატე პროდუქტი..."
-                  className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary"/>
-                <button onClick={addItem} className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-opacity-90 transition">+</button>
-              </div>
-            </div>
-
-            {/* Items */}
-            <div className="flex-1 p-4 space-y-2 overflow-y-auto">
-              {uncheckedItems.length===0 && checkedItems.length===0 && (
-                <p className="text-center text-gray-400 text-sm py-8">სია ცარიელია</p>
-              )}
-
-              {uncheckedItems.map(item=>(
-                <div key={item.id} className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-gray-200 transition group">
-                  <button onClick={()=>toggleItem(item,"checked")}
-                    className="w-5 h-5 rounded-full border-2 border-gray-300 hover:border-primary flex-shrink-0 transition"/>
-                  <span className="flex-1 text-sm text-gray-800">{item.product_name}</span>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-                    <button onClick={()=>toggleItem(item,"frequent")} title="ხშირი"
-                      className={`text-sm px-1.5 py-0.5 rounded-lg transition ${item.frequent?'bg-yellow-100 text-yellow-600':'hover:bg-gray-100 text-gray-400'}`}>
-                      ★
-                    </button>
-                    <button onClick={()=>deleteItem(item)} className="text-sm px-1.5 py-0.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition">✕</button>
-                  </div>
-                </div>
-              ))}
-
-              {checkedItems.length > 0 && (
-                <>
-                  <p className="text-xs text-gray-400 pt-2 pb-1">✓ შეძენილი</p>
-                  {checkedItems.map(item=>(
-                    <div key={item.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl opacity-60 group">
-                      <button onClick={()=>toggleItem(item,"checked")}
-                        className="w-5 h-5 rounded-full bg-primary border-2 border-primary flex-shrink-0 flex items-center justify-center text-white text-xs">✓</button>
-                      <span className="flex-1 text-sm text-gray-500 line-through">{item.product_name}</span>
-                      <button onClick={()=>deleteItem(item)} className="text-sm px-1.5 py-0.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100">✕</button>
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {/* Frequent items */}
-              {currentList.items?.some(i=>i.frequent) && (
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-xs text-yellow-600 font-medium mb-2">⭐ ხშირად ყიდული</p>
-                  <div className="flex flex-wrap gap-1">
-                    {currentList.items.filter(i=>i.frequent).map(i=>(
-                      <span key={i.id} className="bg-yellow-50 border border-yellow-200 text-yellow-700 text-xs px-2 py-1 rounded-full">{i.product_name}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
-            <div className="text-center">
-              <div className="text-4xl mb-2">📋</div>
-              <p>შექმენი საყიდლების სია</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Alert Panel ────────────────────────────────────────────────────────────
-function AlertPanel({ alerts, onClose, onRefresh }) {
-  const [newProduct, setNewProduct] = useState("");
-  const [newPrice, setNewPrice] = useState("");
-
-  const createAlert = async () => {
-    if (!newProduct.trim()) return;
-    await api("/api/alerts", {
-      method:"POST",
-      body:{product_name:newProduct, target_price: newPrice ? parseFloat(newPrice) : null}
-    });
-    setNewProduct(""); setNewPrice("");
-    onRefresh();
-  };
-
-  const deleteAlert = async (id) => {
-    await api(`/api/alerts/${id}`, {method:"DELETE"});
-    onRefresh();
-  };
-
-  const toggleAlert = async (alert) => {
-    await api(`/api/alerts/${alert.id}`, {method:"PATCH", body:{active:!alert.active}});
-    onRefresh();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40" onClick={onClose}/>
-      <div className="w-full max-w-md bg-white h-full overflow-y-auto slide-in flex flex-col">
-        <div className="bg-yellow-500 text-white p-4 flex items-center justify-between sticky top-0">
-          <div>
-            <h2 className="font-bold text-lg">🔔 ფასის შეტყობინებები</h2>
-            <p className="text-xs text-yellow-100 mt-0.5">გაცნობებ როცა ფასი დაეცემა</p>
-          </div>
-          <button onClick={onClose} className="text-white text-2xl leading-none hover:opacity-70">×</button>
-        </div>
-
-        {/* Create alert */}
-        <div className="p-4 border-b bg-yellow-50">
-          <p className="text-sm font-semibold text-gray-700 mb-3">ახალი შეტყობინება</p>
-          <div className="space-y-2">
-            <input value={newProduct} onChange={e=>setNewProduct(e.target.value)}
-              placeholder="პროდუქტი (მაგ: ჰაგისი)"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400"/>
-            <div className="flex gap-2">
-              <input value={newPrice} onChange={e=>setNewPrice(e.target.value)} type="number" step="0.01"
-                placeholder="მაქს. ფასი ₾ (არასავალდებულო)"
-                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-yellow-400"/>
-              <button onClick={createAlert}
-                className="bg-yellow-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-yellow-600 transition">
-                + დამატება
-              </button>
-            </div>
-            <p className="text-xs text-gray-400">ფასი ცარიელია = ნებისმიერ ფასდაკლებაზე გაცნობ</p>
-          </div>
-        </div>
-
-        {/* Alerts list */}
-        <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-          {alerts.length === 0 && (
-            <p className="text-center text-gray-400 text-sm py-8">
-              შეტყობინება არ გაქვს<br/>
-              <span className="text-xs">დაამატე პროდუქტი, გაცნობებ ფასდაკლებაზე</span>
-            </p>
-          )}
-          {alerts.map(alert=>(
-            <div key={alert.id} className={`p-4 rounded-2xl border-2 transition ${alert.active?'border-yellow-200 bg-yellow-50':'border-gray-100 bg-gray-50 opacity-60'}`}>
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <p className="font-semibold text-gray-800 text-sm">{alert.product_name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {alert.target_price ? `ფასი ≤ ${fmt(alert.target_price)}` : "ნებისმიერი ფასდაკლება"}
-                  </p>
-                  {alert.last_notified_at && (
-                    <p className="text-xs text-green-600 mt-0.5">
-                      ✓ ბოლო შეტყობინება: {new Date(alert.last_notified_at*1000).toLocaleDateString("ka-GE")}
-                    </p>
-                  )}
-                </div>
-                <div className="flex gap-2 items-center ml-3">
-                  <button onClick={()=>toggleAlert(alert)}
-                    className={`w-10 h-6 rounded-full transition-colors relative ${alert.active?'bg-yellow-400':'bg-gray-300'}`}>
-                    <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${alert.active?'translate-x-4':'translate-x-0.5'}`}/>
-                  </button>
-                  <button onClick={()=>deleteAlert(alert.id)} className="text-gray-400 hover:text-red-500 transition text-lg leading-none">✕</button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Add to List Modal ──────────────────────────────────────────────────────
-function AddToListModal({ product, lists, onClose, onRefresh }) {
-  const [selectedList, setSelectedList] = useState(lists[0]?.id || null);
-
-  const addToList = async () => {
-    if (!selectedList) return;
-    await api(`/api/lists/${selectedList}/items`, {
-      method:"POST", body:{product_name:product.product_name}
-    });
-    onRefresh();
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm bounce-in">
-        <h3 className="font-bold text-gray-800 mb-1">📋 სიაში დამატება</h3>
-        <p className="text-sm text-gray-500 mb-4 truncate">{product.product_name}</p>
-
-        {lists.length === 0 ? (
-          <p className="text-sm text-gray-400 mb-4">სია არ გაქვს. ჯერ შექმენი.</p>
-        ) : (
-          <div className="space-y-2 mb-4">
-            {lists.map(l=>(
-              <label key={l.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${selectedList===l.id?'border-primary bg-green-50':'border-gray-100 hover:border-gray-200'}`}>
-                <input type="radio" name="list" value={l.id} checked={selectedList===l.id} onChange={()=>setSelectedList(l.id)} className="accent-primary"/>
-                <span className="text-sm font-medium text-gray-700">{l.name}</span>
-                <span className="text-xs text-gray-400 ml-auto">({l.items?.length||0})</span>
-              </label>
-            ))}
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition">გაუქმება</button>
-          {lists.length > 0 && <button onClick={addToList} className="flex-1 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-opacity-90 transition">დამატება</button>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Alert Notification Toast ───────────────────────────────────────────────
-function AlertToast({ alerts, onClose }) {
-  if (!alerts.length) return null;
-  return (
-    <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm">
-      {alerts.slice(0,3).map((a,i)=>(
-        <div key={i} className="bg-white border-2 border-yellow-400 rounded-2xl shadow-lg p-4 flex gap-3 bounce-in">
-          <span className="text-2xl">🔔</span>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-gray-800 text-sm truncate">{a.product_name}</p>
-            <p className="text-xs text-gray-600">{a.store} — <span className="text-primary font-bold">{fmt(a.current_price)}</span>
-              {a.discount_percent && <span className="ml-1 text-accent">(-{a.discount_percent}%)</span>}
-            </p>
-            {a.product_url && <a href={a.product_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">ნახვა →</a>}
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Filter Bar ─────────────────────────────────────────────────────────────
-function FilterBar({ sortBy, setSortBy, onlyDisc, setOnlyDisc }) {
-  return (
+function FilterBar({sortBy,setSortBy,onlyDisc,setOnlyDisc}){
+  return(
     <div className="flex flex-wrap gap-3 items-center">
       <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
-        className="border rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-primary">
+        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-primary">
         <option value="price">ფასით ↑</option>
         <option value="discount">ფასდაკლებით ↓</option>
         <option value="store">მაღაზიით</option>
       </select>
       <label className="flex items-center gap-2 cursor-pointer select-none">
-        <div onClick={()=>setOnlyDisc(!onlyDisc)} className={`w-11 h-6 rounded-full transition-colors relative ${onlyDisc?'bg-accent':'bg-gray-300'}`}>
+        <div onClick={()=>setOnlyDisc(!onlyDisc)}
+          className={`w-11 h-6 rounded-full transition-colors relative ${onlyDisc?'bg-accent':'bg-gray-300'}`}>
           <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${onlyDisc?'translate-x-5':'translate-x-0.5'}`}/>
         </div>
         <span className="text-sm font-medium text-gray-700">მხოლოდ ფასდაკლებები</span>
@@ -698,352 +335,781 @@ function FilterBar({ sortBy, setSortBy, onlyDisc, setOnlyDisc }) {
   );
 }
 
+// ── Mobile overlay panels ──────────────────────────────────────────────────
+function ShoppingListPanel({lists,onClose,onRefresh,onAnalyze}){
+  const [activeList,setActiveList]=useState(null);
+  const [newListName,setNewListName]=useState("");
+  const [newItem,setNewItem]=useState("");
+  const [creating,setCreating]=useState(false);
+  useEffect(()=>{if(lists.length>0&&!activeList)setActiveList(lists[0]);},[lists]);
+  const currentList=lists.find(l=>l.id===activeList?.id);
+  const createList=async()=>{
+    if(!newListName.trim())return;
+    const r=await api("/api/lists",{method:"POST",body:{name:newListName}});
+    setNewListName("");setCreating(false);await onRefresh();setActiveList({id:r.id});
+  };
+  const deleteList=async(id)=>{
+    if(!confirm("სია წაიშლება?"))return;
+    await api(`/api/lists/${id}`,{method:"DELETE"});setActiveList(null);onRefresh();
+  };
+  const addItem=async()=>{
+    if(!newItem.trim()||!currentList)return;
+    await api(`/api/lists/${currentList.id}/items`,{method:"POST",body:{product_name:newItem}});
+    setNewItem("");onRefresh();
+  };
+  const toggleItem=async(item,field)=>{
+    await api(`/api/lists/${currentList.id}/items/${item.id}`,{method:"PATCH",body:{[field]:!item[field]}});
+    onRefresh();
+  };
+  const deleteItem=async(item)=>{
+    await api(`/api/lists/${currentList.id}/items/${item.id}`,{method:"DELETE"});onRefresh();
+  };
+  const unchecked=currentList?.items?.filter(i=>!i.checked)||[];
+  const checked=currentList?.items?.filter(i=>i.checked)||[];
+  return(
+    <div className="fixed inset-0 z-50 flex lg:hidden">
+      <div className="flex-1 bg-black/40" onClick={onClose}/>
+      <div className="w-full max-w-sm bg-white h-full overflow-y-auto slide-in flex flex-col">
+        <ListPanelContent lists={lists} activeList={activeList} setActiveList={setActiveList} creating={creating} setCreating={setCreating}
+          newListName={newListName} setNewListName={setNewListName} createList={createList} currentList={currentList}
+          unchecked={unchecked} checked={checked} newItem={newItem} setNewItem={setNewItem} addItem={addItem}
+          toggleItem={toggleItem} deleteItem={deleteItem} deleteList={deleteList} onAnalyze={onAnalyze} onClose={onClose}/>
+      </div>
+    </div>
+  );
+}
+
+function ListPanelContent({lists,activeList,setActiveList,creating,setCreating,newListName,setNewListName,createList,currentList,unchecked,checked,newItem,setNewItem,addItem,toggleItem,deleteItem,deleteList,onAnalyze,onClose}){
+  return(
+    <>
+      <div className="bg-primary text-white p-4 flex items-center justify-between sticky top-0 z-10 shrink-0">
+        <h2 className="font-bold text-base">📋 საყიდლების სიები</h2>
+        {onClose&&<button onClick={onClose} className="text-white text-2xl leading-none hover:opacity-70 lg:hidden">×</button>}
+      </div>
+      <div className="p-3 border-b bg-gray-50 shrink-0">
+        <div className="flex gap-2 flex-wrap">
+          {lists.map(l=>(
+            <button key={l.id} onClick={()=>setActiveList(l)}
+              className={`px-3 py-1 rounded-full text-sm font-medium transition ${activeList?.id===l.id?'bg-primary text-white':'bg-white border border-gray-200 text-gray-600 hover:border-primary'}`}>
+              {l.name}<span className="ml-1 text-xs opacity-60">({l.items?.length||0})</span>
+            </button>
+          ))}
+          {creating
+            ?<div className="flex gap-1">
+              <input value={newListName} onChange={e=>setNewListName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createList()} autoFocus placeholder="სახელი"
+                className="border rounded-full px-3 py-1 text-sm w-28 focus:ring-1 focus:ring-primary"/>
+              <button onClick={createList} className="bg-primary text-white px-3 py-1 rounded-full text-sm">✓</button>
+              <button onClick={()=>setCreating(false)} className="text-gray-400 px-2">✕</button>
+             </div>
+            :<button onClick={()=>setCreating(true)}
+              className="px-3 py-1 rounded-full text-sm border border-dashed border-gray-300 text-gray-400 hover:border-primary hover:text-primary transition">
+              + ახალი
+             </button>
+          }
+        </div>
+      </div>
+      {currentList?(
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="p-3 flex gap-2 border-b shrink-0">
+            <button onClick={()=>onAnalyze(currentList.items.filter(i=>!i.checked).map(i=>i.product_name))}
+              disabled={unchecked.length===0}
+              className="flex-1 bg-primary text-white text-xs font-semibold py-2 rounded-xl hover:bg-mid transition disabled:opacity-40">
+              🤖 ფასების ანალიზი
+            </button>
+            <button onClick={()=>deleteList(currentList.id)} className="px-3 py-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition text-sm">🗑️</button>
+          </div>
+          <div className="p-3 border-b shrink-0">
+            <div className="flex gap-2">
+              <input value={newItem} onChange={e=>setNewItem(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addItem()}
+                placeholder="პროდუქტი..."
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-primary"/>
+              <button onClick={addItem} className="bg-primary text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-mid transition">+</button>
+            </div>
+          </div>
+          <div className="flex-1 p-3 space-y-2 overflow-y-auto">
+            {unchecked.length===0&&checked.length===0&&<p className="text-center text-gray-400 text-sm py-8">სია ცარიელია</p>}
+            {unchecked.map(item=>(
+              <div key={item.id} className="flex items-center gap-2 p-2.5 bg-white border border-gray-100 rounded-xl hover:border-gray-200 group">
+                <button onClick={()=>toggleItem(item,"checked")} className="w-5 h-5 rounded-full border-2 border-gray-300 hover:border-primary shrink-0 transition"/>
+                <span className="flex-1 text-sm text-gray-800">{item.product_name}</span>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                  <button onClick={()=>toggleItem(item,"frequent")} className={`text-sm px-1 py-0.5 rounded transition ${item.frequent?'bg-amber-100 text-amber-600':'hover:bg-gray-100 text-gray-400'}`}>★</button>
+                  <button onClick={()=>deleteItem(item)} className="text-sm px-1 py-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition">✕</button>
+                </div>
+              </div>
+            ))}
+            {checked.length>0&&(
+              <><p className="text-xs text-gray-400 pt-2 pb-1">✓ შეძენილი</p>
+              {checked.map(item=>(
+                <div key={item.id} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl opacity-60 group">
+                  <button onClick={()=>toggleItem(item,"checked")} className="w-5 h-5 rounded-full bg-primary border-2 border-primary shrink-0 flex items-center justify-center text-white text-xs">✓</button>
+                  <span className="flex-1 text-sm text-gray-500 line-through">{item.product_name}</span>
+                  <button onClick={()=>deleteItem(item)} className="text-sm px-1 py-0.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
+                </div>
+              ))}</>
+            )}
+          </div>
+        </div>
+      ):(
+        <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+          <div className="text-center"><div className="text-4xl mb-2">📋</div><p>შექმენი სია</p></div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function AlertPanel({alerts,onClose,onRefresh}){
+  const [newProduct,setNewProduct]=useState("");
+  const [newPrice,setNewPrice]=useState("");
+  const createAlert=async()=>{
+    if(!newProduct.trim())return;
+    await api("/api/alerts",{method:"POST",body:{product_name:newProduct,target_price:newPrice?parseFloat(newPrice):null}});
+    setNewProduct("");setNewPrice("");onRefresh();
+  };
+  const deleteAlert=async(id)=>{ await api(`/api/alerts/${id}`,{method:"DELETE"});onRefresh(); };
+  const toggleAlert=async(a)=>{ await api(`/api/alerts/${a.id}`,{method:"PATCH",body:{active:!a.active}});onRefresh(); };
+  return(
+    <div className="fixed inset-0 z-50 flex lg:hidden">
+      <div className="flex-1 bg-black/40" onClick={onClose}/>
+      <div className="w-full max-w-sm bg-white h-full overflow-y-auto slide-in flex flex-col">
+        <AlertPanelContent alerts={alerts} onClose={onClose} createAlert={createAlert} deleteAlert={deleteAlert} toggleAlert={toggleAlert}
+          newProduct={newProduct} setNewProduct={setNewProduct} newPrice={newPrice} setNewPrice={setNewPrice}/>
+      </div>
+    </div>
+  );
+}
+
+function AlertPanelContent({alerts,onClose,createAlert,deleteAlert,toggleAlert,newProduct,setNewProduct,newPrice,setNewPrice}){
+  return(
+    <>
+      <div className="bg-amber-500 text-white p-4 flex items-center justify-between sticky top-0 shrink-0">
+        <div>
+          <h2 className="font-bold text-base">🔔 ფასის შეტყობინებები</h2>
+          <p className="text-xs text-amber-100 mt-0.5">გაცნობ ფასდაკლებაზე</p>
+        </div>
+        {onClose&&<button onClick={onClose} className="text-white text-2xl leading-none hover:opacity-70 lg:hidden">×</button>}
+      </div>
+      <div className="p-3 border-b bg-amber-50 shrink-0">
+        <div className="space-y-2">
+          <input value={newProduct} onChange={e=>setNewProduct(e.target.value)}
+            placeholder="პროდუქტი (მაგ: ჰაგისი)"
+            className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400"/>
+          <div className="flex gap-2">
+            <input value={newPrice} onChange={e=>setNewPrice(e.target.value)} type="number" step="0.01"
+              placeholder="მაქს. ფასი ₾ (სურვილისამებრ)"
+              className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-amber-400"/>
+            <button onClick={createAlert} className="bg-amber-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-amber-600 transition">+ დამატება</button>
+          </div>
+          <p className="text-xs text-gray-400">ფასი ცარიელია = ნებისმიერ ფასდაკლებაზე</p>
+        </div>
+      </div>
+      <div className="flex-1 p-3 space-y-3 overflow-y-auto">
+        {alerts.length===0&&<p className="text-center text-gray-400 text-sm py-8">შეტყობინება არ გაქვს</p>}
+        {alerts.map(alert=>(
+          <div key={alert.id} className={`p-3 rounded-xl border-2 ${alert.active?'border-amber-200 bg-amber-50':'border-gray-100 bg-gray-50 opacity-60'}`}>
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <p className="font-semibold text-gray-800 text-sm">{alert.product_name}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{alert.target_price?`ფასი ≤ ${fmt(alert.target_price)}`:"ნებისმიერი ფასდაკლება"}</p>
+              </div>
+              <div className="flex gap-2 items-center ml-3">
+                <button onClick={()=>toggleAlert(alert)} className={`w-9 h-5 rounded-full transition-colors relative ${alert.active?'bg-amber-400':'bg-gray-300'}`}>
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${alert.active?'translate-x-4':'translate-x-0.5'}`}/>
+                </button>
+                <button onClick={()=>deleteAlert(alert.id)} className="text-gray-400 hover:text-red-500 transition text-lg leading-none">✕</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ── Add to List Modal ──────────────────────────────────────────────────────
+function AddToListModal({product,lists,onClose,onRefresh}){
+  const [selectedList,setSelectedList]=useState(lists[0]?.id||null);
+  const addToList=async()=>{
+    if(!selectedList)return;
+    await api(`/api/lists/${selectedList}/items`,{method:"POST",body:{product_name:product.product_name}});
+    onRefresh();onClose();
+  };
+  return(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl p-5 w-full max-w-sm bounce-in">
+        <h3 className="font-bold text-gray-800 mb-1">📋 სიაში დამატება</h3>
+        <p className="text-sm text-gray-500 mb-4 truncate">{product.product_name}</p>
+        {lists.length===0
+          ?<p className="text-sm text-gray-400 mb-4">სია არ გაქვს. ჯერ შექმენი.</p>
+          :<div className="space-y-2 mb-4">
+            {lists.map(l=>(
+              <label key={l.id} className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${selectedList===l.id?'border-primary bg-emerald-50':'border-gray-100 hover:border-gray-200'}`}>
+                <input type="radio" name="list" value={l.id} checked={selectedList===l.id} onChange={()=>setSelectedList(l.id)} className="accent-primary"/>
+                <span className="text-sm font-medium text-gray-700">{l.name}</span>
+                <span className="text-xs text-gray-400 ml-auto">({l.items?.length||0})</span>
+              </label>
+            ))}
+           </div>
+        }
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 transition">გაუქმება</button>
+          {lists.length>0&&<button onClick={addToList} className="flex-1 py-2 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-mid transition">დამატება</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Alert Toast ────────────────────────────────────────────────────────────
+function AlertToast({alerts,onClose}){
+  if(!alerts.length) return null;
+  return(
+    <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm">
+      {alerts.slice(0,3).map((a,i)=>(
+        <div key={i} className="bg-white border-2 border-amber-400 rounded-2xl shadow-lg p-4 flex gap-3 bounce-in">
+          <span className="text-2xl">🔔</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-gray-800 text-sm truncate">{a.product_name}</p>
+            <p className="text-xs text-gray-600">{a.store} — <span className="text-primary font-bold">{fmt(a.current_price)}</span>
+              {a.discount_percent&&<span className="ml-1 text-accent">(-{a.discount_percent}%)</span>}
+            </p>
+            {a.product_url&&<a href={a.product_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">ნახვა →</a>}
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Desktop Sidebar (always visible on lg+)
+// ══════════════════════════════════════════════════════════════════════════════
+function DesktopSidebar({lists,alerts,onRefresh,onRefreshAlerts,onAnalyze}){
+  const [activeList,setActiveList]=useState(null);
+  const [newListName,setNewListName]=useState("");
+  const [newItem,setNewItem]=useState("");
+  const [creating,setCreating]=useState(false);
+  const [tab,setTab]=useState("lists"); // "lists" | "alerts"
+  const [newProduct,setNewProduct]=useState("");
+  const [newPrice,setNewPrice]=useState("");
+
+  useEffect(()=>{if(lists.length>0&&!activeList)setActiveList(lists[0]);},[lists]);
+  const currentList=lists.find(l=>l.id===activeList?.id);
+  const unchecked=currentList?.items?.filter(i=>!i.checked)||[];
+  const checked=currentList?.items?.filter(i=>i.checked)||[];
+
+  const createList=async()=>{
+    if(!newListName.trim())return;
+    const r=await api("/api/lists",{method:"POST",body:{name:newListName}});
+    setNewListName("");setCreating(false);await onRefresh();setActiveList({id:r.id});
+  };
+  const deleteList=async(id)=>{
+    if(!confirm("სია წაიშლება?"))return;
+    await api(`/api/lists/${id}`,{method:"DELETE"});setActiveList(null);onRefresh();
+  };
+  const addItem=async()=>{
+    if(!newItem.trim()||!currentList)return;
+    await api(`/api/lists/${currentList.id}/items`,{method:"POST",body:{product_name:newItem}});
+    setNewItem("");onRefresh();
+  };
+  const toggleItem=async(item,field)=>{
+    await api(`/api/lists/${currentList.id}/items/${item.id}`,{method:"PATCH",body:{[field]:!item[field]}});
+    onRefresh();
+  };
+  const deleteItem=async(item)=>{
+    await api(`/api/lists/${currentList.id}/items/${item.id}`,{method:"DELETE"});onRefresh();
+  };
+  const createAlert=async()=>{
+    if(!newProduct.trim())return;
+    await api("/api/alerts",{method:"POST",body:{product_name:newProduct,target_price:newPrice?parseFloat(newPrice):null}});
+    setNewProduct("");setNewPrice("");onRefreshAlerts();
+  };
+  const deleteAlert=async(id)=>{ await api(`/api/alerts/${id}`,{method:"DELETE"});onRefreshAlerts(); };
+  const toggleAlert=async(a)=>{ await api(`/api/alerts/${a.id}`,{method:"PATCH",body:{active:!a.active}});onRefreshAlerts(); };
+
+  return(
+    <aside className="hidden lg:flex flex-col w-80 xl:w-88 border-l border-gray-200 bg-white sidebar-scroll">
+      {/* Tab switcher */}
+      <div className="flex border-b border-gray-200 shrink-0">
+        <button onClick={()=>setTab("lists")}
+          className={`flex-1 py-3 text-sm font-semibold transition ${tab==="lists"?'text-primary border-b-2 border-primary':'text-gray-500 hover:text-gray-700'}`}>
+          📋 სიები {lists.length>0&&<span className="ml-1 text-xs bg-slate-100 text-slate-600 px-1.5 rounded-full">{lists.length}</span>}
+        </button>
+        <button onClick={()=>setTab("alerts")}
+          className={`flex-1 py-3 text-sm font-semibold transition ${tab==="alerts"?'text-amber-600 border-b-2 border-amber-500':'text-gray-500 hover:text-gray-700'}`}>
+          🔔 შეტყობინებები {alerts.filter(a=>a.active).length>0&&<span className="ml-1 text-xs bg-amber-100 text-amber-700 px-1.5 rounded-full">{alerts.filter(a=>a.active).length}</span>}
+        </button>
+      </div>
+
+      {/* Lists tab */}
+      {tab==="lists"&&(
+        <div className="flex flex-col flex-1 min-h-0">
+          {/* List selector */}
+          <div className="p-3 border-b bg-slate-50 shrink-0">
+            <div className="flex gap-1.5 flex-wrap">
+              {lists.map(l=>(
+                <button key={l.id} onClick={()=>setActiveList(l)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition ${activeList?.id===l.id?'bg-primary text-white':'bg-white border border-gray-200 text-gray-600 hover:border-primary'}`}>
+                  {l.name} <span className="opacity-60">({l.items?.length||0})</span>
+                </button>
+              ))}
+              {creating
+                ?<div className="flex gap-1">
+                  <input value={newListName} onChange={e=>setNewListName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&createList()} autoFocus placeholder="სახელი"
+                    className="border rounded-full px-2 py-0.5 text-xs w-24 focus:ring-1 focus:ring-primary"/>
+                  <button onClick={createList} className="bg-primary text-white px-2 py-0.5 rounded-full text-xs">✓</button>
+                  <button onClick={()=>setCreating(false)} className="text-gray-400 text-xs">✕</button>
+                 </div>
+                :<button onClick={()=>setCreating(true)}
+                  className="px-2.5 py-1 rounded-full text-xs border border-dashed border-gray-300 text-gray-400 hover:border-primary hover:text-primary transition">
+                  + ახალი
+                 </button>
+              }
+            </div>
+          </div>
+
+          {currentList?(
+            <div className="flex flex-col flex-1 min-h-0">
+              <div className="p-3 flex gap-2 border-b shrink-0">
+                <button onClick={()=>onAnalyze(currentList.items.filter(i=>!i.checked).map(i=>i.product_name))}
+                  disabled={unchecked.length===0}
+                  className="flex-1 bg-primary text-white text-xs font-semibold py-2 rounded-xl hover:bg-mid transition disabled:opacity-40">
+                  🤖 ფასების ანალიზი ({unchecked.length})
+                </button>
+                <button onClick={()=>deleteList(currentList.id)} className="px-3 py-2 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition text-xs">🗑️</button>
+              </div>
+              <div className="p-3 border-b shrink-0">
+                <div className="flex gap-2">
+                  <input value={newItem} onChange={e=>setNewItem(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addItem()}
+                    placeholder="პროდუქტი..." className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary"/>
+                  <button onClick={addItem} className="bg-primary text-white px-3 py-1.5 rounded-xl text-sm font-semibold hover:bg-mid transition">+</button>
+                </div>
+              </div>
+              <div className="flex-1 p-3 space-y-1.5 overflow-y-auto">
+                {unchecked.length===0&&checked.length===0&&<p className="text-center text-gray-400 text-sm py-6">სია ცარიელია</p>}
+                {unchecked.map(item=>(
+                  <div key={item.id} className="flex items-center gap-2 px-2.5 py-2 bg-white border border-gray-100 rounded-xl hover:border-gray-200 group">
+                    <button onClick={()=>toggleItem(item,"checked")} className="w-4 h-4 rounded-full border-2 border-gray-300 hover:border-primary shrink-0 transition"/>
+                    <span className="flex-1 text-xs text-gray-800">{item.product_name}</span>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <button onClick={()=>toggleItem(item,"frequent")} className={`text-xs px-1 rounded transition ${item.frequent?'bg-amber-100 text-amber-600':'hover:bg-gray-100 text-gray-400'}`}>★</button>
+                      <button onClick={()=>deleteItem(item)} className="text-xs px-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition">✕</button>
+                    </div>
+                  </div>
+                ))}
+                {checked.length>0&&(
+                  <><p className="text-xs text-gray-400 pt-1 pb-0.5">✓ შეძენილი</p>
+                  {checked.map(item=>(
+                    <div key={item.id} className="flex items-center gap-2 px-2.5 py-2 bg-gray-50 rounded-xl opacity-60 group">
+                      <button onClick={()=>toggleItem(item,"checked")} className="w-4 h-4 rounded-full bg-primary border-2 border-primary shrink-0 flex items-center justify-center text-white" style={{fontSize:'8px'}}>✓</button>
+                      <span className="flex-1 text-xs text-gray-500 line-through">{item.product_name}</span>
+                      <button onClick={()=>deleteItem(item)} className="text-xs px-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
+                    </div>
+                  ))}</>
+                )}
+              </div>
+            </div>
+          ):(
+            <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">
+              <div className="text-center"><div className="text-4xl mb-2">📋</div><p>შექმენი სია</p></div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Alerts tab */}
+      {tab==="alerts"&&(
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="p-3 border-b bg-amber-50 shrink-0 space-y-2">
+            <input value={newProduct} onChange={e=>setNewProduct(e.target.value)} placeholder="პროდუქტი..."
+              className="w-full border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-400"/>
+            <div className="flex gap-2">
+              <input value={newPrice} onChange={e=>setNewPrice(e.target.value)} type="number" step="0.01" placeholder="მაქს. ფასი ₾"
+                className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-400"/>
+              <button onClick={createAlert} className="bg-amber-500 text-white px-3 py-1.5 rounded-xl text-sm font-semibold hover:bg-amber-600 transition">+</button>
+            </div>
+          </div>
+          <div className="flex-1 p-3 space-y-2 overflow-y-auto">
+            {alerts.length===0&&<p className="text-center text-gray-400 text-sm py-6">შეტყობინება არ გაქვს</p>}
+            {alerts.map(alert=>(
+              <div key={alert.id} className={`p-3 rounded-xl border-2 ${alert.active?'border-amber-200 bg-amber-50':'border-gray-100 bg-gray-50 opacity-60'}`}>
+                <div className="flex justify-between items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-xs truncate">{alert.product_name}</p>
+                    <p className="text-xs text-gray-500">{alert.target_price?`≤ ${fmt(alert.target_price)}`:"ნებისმიერი ფასდაკლება"}</p>
+                  </div>
+                  <div className="flex gap-2 items-center shrink-0">
+                    <button onClick={()=>toggleAlert(alert)} className={`w-8 h-4 rounded-full transition-colors relative ${alert.active?'bg-amber-400':'bg-gray-300'}`}>
+                      <div className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${alert.active?'translate-x-4':'translate-x-0.5'}`}/>
+                    </button>
+                    <button onClick={()=>deleteAlert(alert.id)} className="text-gray-400 hover:text-red-500 transition text-sm leading-none">✕</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // Main App
 // ══════════════════════════════════════════════════════════════════════════════
-function App() {
-  // Search state
-  const [query, setQuery]     = useState("");
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
-  const [summary, setSummary] = useState("");
-  const [source,  setSource]  = useState("");   // "cache" | "local_db" | "live"
-  const [error, setError]     = useState("");
-  const [sortBy, setSortBy]   = useState("price");
-  const [onlyDisc, setOnlyDisc] = useState(false);
+function App(){
+  const [query,setQuery]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [results,setResults]=useState([]);
+  const [summary,setSummary]=useState("");
+  const [source,setSource]=useState("");
+  const [error,setError]=useState("");
+  const [sortBy,setSortBy]=useState("price");
+  const [onlyDisc,setOnlyDisc]=useState(false);
 
-  // Basket state
-  const [mode, setMode]               = useState("search"); // "search" | "basket"
-  const [basketInput, setBasketInput] = useState("");
-  const [basketItems, setBasketItems] = useState([]);
-  const [basketLoading, setBasketLoading] = useState(false);
-  const [basketResult, setBasketResult]   = useState(null);
-  const [basketError, setBasketError]     = useState("");
+  const [mode,setMode]=useState("search");
+  const [basketInput,setBasketInput]=useState("");
+  const [basketItems,setBasketItems]=useState([]);
+  const [basketLoading,setBasketLoading]=useState(false);
+  const [basketResult,setBasketResult]=useState(null);
+  const [basketError,setBasketError]=useState("");
 
-  // Panels
-  const [showLists, setShowLists]   = useState(false);
-  const [showAlerts, setShowAlerts] = useState(false);
+  const [showLists,setShowLists]=useState(false);
+  const [showAlerts,setShowAlerts]=useState(false);
+  const [lists,setLists]=useState([]);
+  const [alerts,setAlerts]=useState([]);
+  const [addToListProduct,setAddToListProduct]=useState(null);
+  const [toastAlerts,setToastAlerts]=useState([]);
 
-  // Lists & alerts data
-  const [lists, setLists]   = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [addToListProduct, setAddToListProduct] = useState(null);
-  const [alertProduct, setAlertProduct] = useState(null);
-  const [toastAlerts, setToastAlerts]   = useState([]);
-
-  // History
-  const [history, setHistory] = useState(()=>{
+  const [history,setHistory]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("searchHistory")||"[]")}catch{return[]}
   });
+  const [trending,setTrending]=useState([]);
 
-  const [trending, setTrending] = useState([]);
-
-  // Load data
-  const refreshLists  = useCallback(()=>api("/api/lists").then(d=>setLists(d.lists||[])).catch(()=>{}), []);
-  const refreshAlerts = useCallback(()=>api("/api/alerts").then(d=>setAlerts(d.alerts||[])).catch(()=>{}), []);
+  const refreshLists=useCallback(()=>api("/api/lists").then(d=>setLists(d.lists||[])).catch(()=>{}),[]);
+  const refreshAlerts=useCallback(()=>api("/api/alerts").then(d=>setAlerts(d.alerts||[])).catch(()=>{}),[]);
 
   useEffect(()=>{
     requestNotifications();
-    refreshLists();
-    refreshAlerts();
+    refreshLists();refreshAlerts();
     api("/api/trending").then(d=>setTrending(d.trending||[])).catch(()=>{});
-  }, []);
+  },[]);
 
-  // Poll alerts every 5 minutes
   useEffect(()=>{
-    const poll = ()=>{
+    const poll=()=>{
       api("/api/alerts/check").then(d=>{
-        const triggered = d.triggered||[];
-        if(triggered.length){
-          setToastAlerts(triggered);
-          triggered.forEach(a=>{
-            sendNotification(
-              `🔔 ფასდაკლება: ${a.product_name}`,
-              `${a.store} — ${fmt(a.current_price)} (${a.discount_percent}% ფასდაკლება)`,
-              a.product_url
-            );
-          });
+        const t=d.triggered||[];
+        if(t.length){
+          setToastAlerts(t);
+          t.forEach(a=>sendNotification(`🔔 ${a.product_name}`,`${a.store} — ${fmt(a.current_price)}`,a.product_url));
         }
       }).catch(()=>{});
     };
     poll();
-    const id = setInterval(poll, 5*60*1000);
-    return ()=>clearInterval(id);
-  }, []);
+    const id=setInterval(poll,5*60*1000);
+    return()=>clearInterval(id);
+  },[]);
 
-  const saveHistory = (q) => {
-    const updated = [q, ...history.filter(h=>h!==q)].slice(0,20);
+  const saveHistory=(q)=>{
+    const updated=[q,...history.filter(h=>h!==q)].slice(0,20);
     setHistory(updated);
-    localStorage.setItem("searchHistory", JSON.stringify(updated));
+    localStorage.setItem("searchHistory",JSON.stringify(updated));
   };
 
-  // ── Search ──
-  const doSearch = useCallback(async (q) => {
-    const sq = (q||query).trim();
-    if(!sq) return;
-    setQuery(sq); setLoading(true); setError(""); setResults([]); setSummary(""); setSource("");
+  const doSearch=useCallback(async(q)=>{
+    const sq=(q||query).trim();
+    if(!sq)return;
+    setQuery(sq);setLoading(true);setError("");setResults([]);setSummary("");setSource("");
     saveHistory(sq);
-    try {
-      const data = await api("/api/search", {method:"POST", body:{query:sq}});
-      setResults(data.results||[]);
-      setSummary(data.summary||"");
-      setSource(data.source||"live");
-      if(data.alerts?.length) {
+    try{
+      const data=await api("/api/search",{method:"POST",body:{query:sq}});
+      setResults(data.results||[]);setSummary(data.summary||"");setSource(data.source||"live");
+      if(data.alerts?.length){
         setToastAlerts(data.alerts);
         data.alerts.forEach(a=>sendNotification(`🔔 ${a.product_name}`,`${a.store} — ${fmt(a.current_price)}`,a.product_url));
       }
-    } catch(e){ setError(e.message); }
-    finally{ setLoading(false); }
-  }, [query, history]);
+    }catch(e){setError(e.message);}
+    finally{setLoading(false);}
+  },[query,history]);
 
-  // ── Basket ──
-  const addBasketItem = () => {
-    const t = basketInput.trim();
-    if(!t || basketItems.includes(t)) return;
-    setBasketItems([...basketItems, t]);
-    setBasketInput("");
+  const addBasketItem=()=>{
+    const t=basketInput.trim();
+    if(!t||basketItems.includes(t))return;
+    setBasketItems([...basketItems,t]);setBasketInput("");
   };
-
-  const removeBasketItem = (item) => setBasketItems(basketItems.filter(i=>i!==item));
-
-  const analyzeBasket = async (itemsOverride) => {
-    const items = itemsOverride || basketItems;
-    if(!items.length) return;
-    setMode("basket"); setBasketLoading(true); setBasketError(""); setBasketResult(null);
-    try {
-      const data = await api("/api/basket", {method:"POST", body:{items}});
-      setBasketResult(data);
-    } catch(e){ setBasketError(e.message); }
-    finally { setBasketLoading(false); }
+  const removeBasketItem=(item)=>setBasketItems(basketItems.filter(i=>i!==item));
+  const analyzeBasket=async(itemsOverride)=>{
+    const items=itemsOverride||basketItems;
+    if(!items.length)return;
+    setMode("basket");setBasketLoading(true);setBasketError("");setBasketResult(null);
+    try{const data=await api("/api/basket",{method:"POST",body:{items}});setBasketResult(data);}
+    catch(e){setBasketError(e.message);}
+    finally{setBasketLoading(false);}
   };
-
-  // ── Set alert quick ──
-  const quickAlert = async (product) => {
+  const quickAlert=async(product)=>{
     await api("/api/alerts",{method:"POST",body:{product_name:product.product_name}});
-    refreshAlerts();
-    alert(`✅ შეტყობინება დაყენდა: ${product.product_name}`);
+    refreshAlerts();alert(`✅ შეტყობინება: ${product.product_name}`);
   };
 
-  // Filtered & sorted results
-  const displayed = [...results]
-    .filter(r=>!onlyDisc || r.discount_percent>0)
+  const displayed=[...results]
+    .filter(r=>!onlyDisc||r.discount_percent>0)
     .sort((a,b)=>{
-      if(sortBy==="price")    return (a.current_price||999)-(b.current_price||999);
-      if(sortBy==="discount") return (b.discount_percent||0)-(a.discount_percent||0);
+      if(sortBy==="price")    return(a.current_price||999)-(b.current_price||999);
+      if(sortBy==="discount") return(b.discount_percent||0)-(a.discount_percent||0);
       if(sortBy==="store")    return a.store_name.localeCompare(b.store_name);
       return 0;
     });
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-primary text-white shadow-lg sticky top-0 z-40">
-        <div className="max-w-5xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">🛒</span>
-              <div>
-                <h1 className="font-bold text-lg leading-tight">ფასების შემდარებელი</h1>
-                <p className="text-green-200 text-xs">AI • სუპერმარკეტები • აფთიაქები</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={()=>{setShowAlerts(true);refreshAlerts();}}
-                className="relative bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-sm transition flex items-center gap-1">
-                🔔
-                {alerts.filter(a=>a.active).length>0&&<span className="absolute -top-1 -right-1 bg-accent text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{alerts.filter(a=>a.active).length}</span>}
-              </button>
-              <button onClick={()=>{setShowLists(true);refreshLists();}}
-                className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-sm transition flex items-center gap-1">
-                📋 სიები
-              </button>
+  return(
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+
+      {/* ── HEADER ────────────────────────────────────────────────────────── */}
+      <header className="bg-primary text-white shadow-lg sticky top-0 z-40 h-16">
+        <div className="h-full flex items-center justify-between px-4 lg:px-6 max-w-none">
+
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center text-lg">🛒</div>
+            <div>
+              <h1 className="font-bold text-base leading-tight">ფასების შემდარებელი</h1>
+              <p className="text-green-300 text-xs hidden sm:block">AI • სუპერმარკეტები • აფთიაქები</p>
             </div>
           </div>
 
-          {/* Mode tabs */}
-          <div className="flex gap-1 mt-3 bg-black/20 rounded-xl p-1">
-            <button onClick={()=>setMode("search")}
-              className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition ${mode==="search"?'bg-white text-primary shadow':'text-white/80 hover:text-white'}`}>
-              🔍 ძიება
+          {/* Desktop search bar in header */}
+          <div className="hidden lg:flex flex-1 max-w-xl mx-8 gap-2">
+            <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doSearch()}
+              placeholder="მოძებნე პროდუქტი..."
+              className="flex-1 bg-white/15 border border-white/25 rounded-xl px-4 py-2 text-sm text-white placeholder-green-200 focus:bg-white/25 focus:border-white/50 transition"/>
+            <button onClick={()=>doSearch()} disabled={loading}
+              className="bg-white text-primary px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-50 transition disabled:opacity-60 whitespace-nowrap">
+              {loading?"⏳ ვეძებ":"🔍 ძიება"}
             </button>
-            <button onClick={()=>setMode("basket")}
-              className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition ${mode==="basket"?'bg-white text-primary shadow':'text-white/80 hover:text-white'}`}>
-              🛒 კალათა {basketItems.length>0&&<span className="ml-1 bg-accent text-white text-xs px-1.5 rounded-full">{basketItems.length}</span>}
+          </div>
+
+          {/* Nav buttons */}
+          <div className="flex items-center gap-2">
+            {/* Mode toggle (desktop) */}
+            <div className="hidden lg:flex bg-white/10 rounded-xl p-0.5 gap-0.5">
+              <button onClick={()=>setMode("search")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${mode==="search"?'bg-white text-primary shadow':'text-white/80 hover:text-white'}`}>
+                🔍 ძიება
+              </button>
+              <button onClick={()=>setMode("basket")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${mode==="basket"?'bg-white text-primary shadow':'text-white/80 hover:text-white'}`}>
+                🛒 კალათა {basketItems.length>0&&<span className="ml-1 bg-accent text-white text-xs px-1 rounded-full">{basketItems.length}</span>}
+              </button>
+            </div>
+
+            {/* Mobile: alerts + lists buttons */}
+            <button onClick={()=>{setShowAlerts(true);refreshAlerts();}}
+              className="relative lg:hidden bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl transition">
+              🔔
+              {alerts.filter(a=>a.active).length>0&&<span className="absolute -top-1 -right-1 bg-accent text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">{alerts.filter(a=>a.active).length}</span>}
+            </button>
+            <button onClick={()=>{setShowLists(true);refreshLists();}}
+              className="lg:hidden bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-sm transition">
+              📋
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      {/* ── BODY: main + desktop sidebar ─────────────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
 
-        {/* ═══ SEARCH MODE ═══ */}
-        {mode==="search" && (
-          <>
-            <div className="bg-white rounded-2xl shadow-md p-4">
-              <div className="flex gap-2">
-                <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doSearch()}
-                  placeholder="მაგ: ჰაგისი, ამოქსიცილინი, კარაქი..."
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-base focus:ring-2 focus:ring-primary transition" autoFocus/>
-                <button onClick={()=>doSearch()} disabled={loading}
-                  className="bg-primary text-white px-5 py-3 rounded-xl font-semibold hover:bg-opacity-90 transition disabled:opacity-60 whitespace-nowrap">
-                  {loading?"⏳":"🔍"} ძიება
-                </button>
-              </div>
-              {!loading&&!results.length&&history.length>0&&(
-                <div className="mt-2">
-                  <p className="text-xs text-gray-400 mb-1">ბოლო ძიებები:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {history.slice(0,8).map(q=>(
-                      <button key={q} onClick={()=>doSearch(q)} className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2 py-1 rounded-full transition">{q}</button>
-                    ))}
+        {/* ── MAIN CONTENT ──────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="max-w-5xl mx-auto px-4 py-5 lg:py-6">
+
+            {/* Mobile mode tabs */}
+            <div className="lg:hidden bg-white rounded-2xl shadow-sm border border-gray-100 p-1 flex gap-1 mb-4">
+              <button onClick={()=>setMode("search")}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition ${mode==="search"?'bg-primary text-white shadow':'text-gray-500 hover:text-gray-700'}`}>
+                🔍 ძიება
+              </button>
+              <button onClick={()=>setMode("basket")}
+                className={`flex-1 py-2 rounded-xl text-sm font-semibold transition ${mode==="basket"?'bg-primary text-white shadow':'text-gray-500 hover:text-gray-700'}`}>
+                🛒 კალათა {basketItems.length>0&&<span className="ml-1 bg-accent text-white text-xs px-1.5 rounded-full">{basketItems.length}</span>}
+              </button>
+            </div>
+
+            {/* ═══ SEARCH MODE ═══ */}
+            {mode==="search"&&(
+              <>
+                {/* Mobile search box */}
+                <div className="lg:hidden bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+                  <div className="flex gap-2">
+                    <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doSearch()}
+                      placeholder="მაგ: ჰაგისი, ამოქსიცილინი..."
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-base focus:ring-2 focus:ring-primary transition" autoFocus/>
+                    <button onClick={()=>doSearch()} disabled={loading}
+                      className="bg-primary text-white px-5 py-3 rounded-xl font-semibold hover:bg-mid transition disabled:opacity-60">
+                      {loading?"⏳":"🔍"}
+                    </button>
+                  </div>
+                  {!loading&&!results.length&&history.length>0&&(
+                    <div className="mt-3">
+                      <p className="text-xs text-gray-400 mb-1.5">ბოლო ძიებები:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {history.slice(0,8).map(q=>(
+                          <button key={q} onClick={()=>doSearch(q)} className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-2.5 py-1 rounded-full transition">{q}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Desktop: history pills below header */}
+                {!loading&&!results.length&&history.length>0&&(
+                  <div className="hidden lg:block mb-4">
+                    <p className="text-xs text-gray-400 mb-2">ბოლო ძიებები:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {history.slice(0,10).map(q=>(
+                        <button key={q} onClick={()=>doSearch(q)} className="text-xs bg-white border border-gray-200 hover:border-primary text-gray-600 hover:text-primary px-3 py-1 rounded-full shadow-sm transition">{q}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Trending */}
+                {!loading&&!results.length&&trending.length>0&&(
+                  <div className="mb-4">
+                    <p className="text-sm font-semibold text-gray-500 mb-2">🔥 პოპულარული დღეს</p>
+                    <div className="flex flex-wrap gap-2">
+                      {trending.map(t=>(
+                        <button key={t.query} onClick={()=>doSearch(t.query)}
+                          className="bg-white border border-gray-200 text-gray-700 text-sm px-3 py-1.5 rounded-full shadow-sm hover:border-primary hover:text-primary transition">
+                          {t.query} <span className="text-xs text-gray-400">({t.count})</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {error&&<div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-sm">⚠️ {error}</div>}
+                {loading&&<SearchProgress loading={true} isBasket={false}/>}
+
+                {!loading&&results.length>0&&(
+                  <div className="fade-up">
+                    <div className="flex items-start gap-2 mb-4 flex-wrap">
+                      {source==="local_db"&&<span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">⚡ ბაზიდან</span>}
+                      {source==="cache"   &&<span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">💾 ქეში</span>}
+                      {source==="live"    &&<span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">🌐 პირდაპირი</span>}
+                      {summary&&<p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2 flex-1">🤖 {summary}</p>}
+                    </div>
+                    <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
+                      <FilterBar sortBy={sortBy} setSortBy={setSortBy} onlyDisc={onlyDisc} setOnlyDisc={setOnlyDisc}/>
+                      <p className="text-sm text-gray-500">ნაპოვნია <strong>{displayed.length}</strong> შედეგი</p>
+                    </div>
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      {displayed.map((p,i)=>(
+                        <ResultRow key={`${p.store_name}-${i}`} product={p} rank={i}
+                          onAddToList={(prod)=>lists.length>0?setAddToListProduct(prod):alert("ჯერ შექმენი სია 📋")}
+                          onSetAlert={quickAlert}/>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!loading&&!error&&!results.length&&(
+                  <div className="text-center py-20 text-gray-400">
+                    <div className="text-7xl mb-4 opacity-40">🛒</div>
+                    <p className="text-xl font-semibold text-gray-600 mb-1">რა გსურთ მოძებნოთ?</p>
+                    <p className="text-sm text-gray-400 mb-6">მოძებნე ნებისმიერი პროდუქტი — სუპერმარკეტიდან აფთიაქამდე</p>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {["ჰაგისი","ამოქსიცილინი","ძეხვი","კარაქი","შამპუნი","ნო-შპა"].map(s=>(
+                        <button key={s} onClick={()=>doSearch(s)}
+                          className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-full shadow-sm hover:border-primary hover:text-primary transition text-sm font-medium">{s}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ═══ BASKET MODE ═══ */}
+            {mode==="basket"&&(
+              <div>
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
+                  <h2 className="font-bold text-gray-800 mb-1 flex items-center gap-2 text-lg">
+                    <span>🛒</span> კალათის ანალიზი
+                  </h2>
+                  <p className="text-sm text-gray-500 mb-4">AI გეტყვის სად ყიდეს სულ იაფად — ერთ ან სხვადასხვა მაღაზიაში</p>
+                  <div className="flex gap-2 mb-3">
+                    <input value={basketInput} onChange={e=>setBasketInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addBasketItem()}
+                      placeholder="მაგ: კოლა, კვერცხი, ზეთი..."
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary transition"/>
+                    <button onClick={addBasketItem} className="bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-mid transition">+</button>
+                  </div>
+                  {basketItems.length>0&&(
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {basketItems.map(item=>(
+                        <span key={item} className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-sm font-medium">
+                          {item}
+                          <button onClick={()=>removeBasketItem(item)} className="text-primary/60 hover:text-primary leading-none">×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {basketItems.length===0&&(
+                    <div className="mb-3">
+                      <p className="text-xs text-gray-400 mb-1.5">სწრაფი მაგალითი:</p>
+                      <button onClick={()=>setBasketItems(["კოლა","კვერცხი","ზეთი"])}
+                        className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full transition">კოლა + კვერცხი + ზეთი</button>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={()=>analyzeBasket()} disabled={basketItems.length===0||basketLoading}
+                      className="flex-1 bg-primary text-white py-2.5 rounded-xl font-semibold hover:bg-mid transition disabled:opacity-40 text-sm flex items-center justify-center gap-2">
+                      {basketLoading?<><span className="animate-spin">⏳</span> ვანალიზებ...</>:<>🤖 ფასების ანალიზი</>}
+                    </button>
+                    {basketItems.length>0&&<button onClick={()=>setBasketItems([])}
+                      className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50 transition">გასუფთავება</button>}
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Trending */}
-            {!loading&&!results.length&&trending.length>0&&(
-              <div className="mt-4">
-                <p className="text-sm font-semibold text-gray-500 mb-2">🔥 პოპულარული დღეს</p>
-                <div className="flex flex-wrap gap-2">
-                  {trending.map(t=>(
-                    <button key={t.query} onClick={()=>doSearch(t.query)}
-                      className="bg-white border border-gray-200 text-gray-700 text-sm px-3 py-1.5 rounded-full shadow-sm hover:border-primary hover:text-primary transition">
-                      {t.query} <span className="text-xs text-gray-400">({t.count})</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {error&&<div className="mt-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-sm">⚠️ {error}</div>}
-
-            {loading&&(
-              <div>
-                <SearchProgress loading={true} isBasket={false} />
-              </div>
-            )}
-
-            {!loading&&results.length>0&&(
-              <div className="mt-6">
-                {/* Source badge + summary */}
-                <div className="flex items-start gap-2 mb-4 flex-wrap">
-                  {source==="local_db" && <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">⚡ ბაზიდან — მყისიერი</span>}
-                  {source==="cache"    && <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">💾 ქეში</span>}
-                  {source==="live"     && <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-xs font-bold px-2.5 py-1 rounded-full shrink-0">🌐 პირდაპირი ძიება</span>}
-                  {summary && <p className="text-sm text-green-800 bg-green-50 border border-green-200 rounded-2xl px-4 py-2 flex-1">🤖 {summary}</p>}
-                </div>
-                <FilterBar sortBy={sortBy} setSortBy={setSortBy} onlyDisc={onlyDisc} setOnlyDisc={setOnlyDisc}/>
-                <p className="text-sm text-gray-500 mt-3 mb-4">ნაპოვნია <strong>{displayed.length}</strong> შედეგი</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {displayed.map((p,i)=>(
-                    <ProductCard key={`${p.store_name}-${i}`} product={p} rank={i}
-                      onAddToList={(prod)=>lists.length>0?setAddToListProduct(prod):alert("ჯერ შექმენი სია 📋")}
-                      onSetAlert={quickAlert}/>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {!loading&&!error&&!results.length&&(
-              <div className="text-center py-16 text-gray-400 mt-4">
-                <div className="text-6xl mb-4">🛒</div>
-                <p className="text-lg font-medium text-gray-600">რა გსურთ მოძებნოთ?</p>
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  {["ჰაგისი","ამოქსიცილინი","ძეხვი","კარაქი","შამპუნი"].map(s=>(
-                    <button key={s} onClick={()=>doSearch(s)}
-                      className="bg-white border border-gray-200 text-gray-600 px-4 py-2 rounded-full shadow-sm hover:border-primary hover:text-primary transition text-sm">{s}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ═══ BASKET MODE ═══ */}
-        {mode==="basket" && (
-          <div>
-            {/* Add items */}
-            <div className="bg-white rounded-2xl shadow-md p-4 mb-4">
-              <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-                <span className="text-xl">🛒</span> კალათის ანალიზი
-              </h2>
-              <p className="text-xs text-gray-500 mb-3">დაამატე პროდუქტები, AI გეტყვის სად ყიდეს სულ იაფად</p>
-
-              <div className="flex gap-2 mb-3">
-                <input value={basketInput} onChange={e=>setBasketInput(e.target.value)}
-                  onKeyDown={e=>e.key==="Enter"&&addBasketItem()}
-                  placeholder="მაგ: კოლა, კვერცხი, ზეთი..."
-                  className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary transition"/>
-                <button onClick={addBasketItem} className="bg-primary text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-opacity-90 transition">+</button>
-              </div>
-
-              {/* Basket items list */}
-              {basketItems.length>0&&(
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {basketItems.map(item=>(
-                    <span key={item} className="flex items-center gap-1.5 bg-primary/10 text-primary border border-primary/20 px-3 py-1 rounded-full text-sm font-medium">
-                      {item}
-                      <button onClick={()=>removeBasketItem(item)} className="text-primary/60 hover:text-primary leading-none text-base">×</button>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Quick add suggestions */}
-              {basketItems.length===0&&(
-                <div className="mt-2">
-                  <p className="text-xs text-gray-400 mb-2">სწრაფი მაგალითი:</p>
-                  <button onClick={()=>setBasketItems(["კოლა","კვერცხი","ზეთი ავედოვი"])}
-                    className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-1.5 rounded-full transition">
-                    კოლა + კვერცხი + ზეთი
-                  </button>
-                </div>
-              )}
-
-              <div className="flex gap-2 mt-3">
-                <button onClick={()=>analyzeBasket()} disabled={basketItems.length===0||basketLoading}
-                  className="flex-1 bg-primary text-white py-2.5 rounded-xl font-semibold hover:bg-opacity-90 transition disabled:opacity-40 text-sm flex items-center justify-center gap-2">
-                  {basketLoading?<><span className="animate-spin">⏳</span> ვანალიზებ...</>:<>🤖 ფასების ანალიზი</>}
-                </button>
-                {basketItems.length>0&&<button onClick={()=>setBasketItems([])}
-                  className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-500 hover:bg-gray-50 transition">გასუფთავება</button>}
-              </div>
-            </div>
-
-            {basketError&&<div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-sm mb-4">⚠️ {basketError}</div>}
-
-            <SearchProgress loading={basketLoading} isBasket={true} />
-            {!basketLoading && <BasketView result={basketResult} loading={false}/>}
-
-            {!basketLoading&&!basketResult&&basketItems.length===0&&(
-              <div className="text-center py-16 text-gray-400">
-                <div className="text-6xl mb-4">🛒</div>
-                <p className="text-lg font-medium text-gray-600">კალათა ცარიელია</p>
-                <p className="text-sm mt-1">დაამატე პროდუქტები ზემოთ</p>
+                {basketError&&<div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-sm mb-4">⚠️ {basketError}</div>}
+                <SearchProgress loading={basketLoading} isBasket={true}/>
+                {!basketLoading&&<BasketView result={basketResult}/>}
+                {!basketLoading&&!basketResult&&basketItems.length===0&&(
+                  <div className="text-center py-16 text-gray-400">
+                    <div className="text-6xl mb-3 opacity-30">🛍️</div>
+                    <p className="text-lg font-semibold text-gray-600">კალათა ცარიელია</p>
+                    <p className="text-sm mt-1">დაამატე პროდუქტები ზემოთ</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
-      </main>
 
-      {/* Footer */}
-      <footer className="text-center text-xs text-gray-400 py-6">Georgian Price Finder • ფასები განახლდება ყოველ 2 საათში</footer>
+          {/* Footer */}
+          <footer className="text-center text-xs text-gray-400 py-4 border-t border-gray-100 mt-4">
+            Georgian Price Finder • ფასები განახლდება ავტომატურად
+          </footer>
+        </main>
 
-      {/* Panels */}
-      {showLists&&<ShoppingListPanel lists={lists} onClose={()=>setShowLists(false)} onRefresh={refreshLists} onAnalyze={(items)=>{setMode("basket");setBasketItems(items);setShowLists(false);}}/>}
+        {/* ── DESKTOP SIDEBAR ───────────────────────────────────────────── */}
+        <DesktopSidebar
+          lists={lists} alerts={alerts}
+          onRefresh={refreshLists} onRefreshAlerts={refreshAlerts}
+          onAnalyze={(items)=>{setMode("basket");setBasketItems(items);}}
+        />
+      </div>
+
+      {/* Mobile overlay panels */}
+      {showLists&&<ShoppingListPanel lists={lists} onClose={()=>setShowLists(false)} onRefresh={refreshLists}
+        onAnalyze={(items)=>{setMode("basket");setBasketItems(items);setShowLists(false);}}/>}
       {showAlerts&&<AlertPanel alerts={alerts} onClose={()=>setShowAlerts(false)} onRefresh={refreshAlerts}/>}
 
-      {/* Add to list modal */}
       {addToListProduct&&<AddToListModal product={addToListProduct} lists={lists} onClose={()=>setAddToListProduct(null)} onRefresh={refreshLists}/>}
-
-      {/* Alert toasts */}
       {toastAlerts.length>0&&<AlertToast alerts={toastAlerts} onClose={()=>setToastAlerts([])}/>}
     </div>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>

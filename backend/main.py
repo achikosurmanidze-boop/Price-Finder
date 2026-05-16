@@ -176,9 +176,7 @@ def check_alerts_for_results(results: list) -> list:
 # Routes — Basic Search
 # ══════════════════════════════════════════════════════════════════════════════
 
-FRONTEND_PATH = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html")
-)
+FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "index.html")
 
 @app.get("/")
 def index():

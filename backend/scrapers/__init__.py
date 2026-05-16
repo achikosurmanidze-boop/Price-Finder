@@ -15,10 +15,9 @@ from .aversi    import AversiScraper
 from .psp       import PspScraper
 from .ili       import IliScraper
 
+# Carrefour and Nikora block scraping (DNS/connection errors) — excluded
 _ALL = [
-    CarrefourScraper(),
     SparScraper(),
-    NikoraScraper(),
     SmartScraper(),
     GoodwillScraper(),
     GpcScraper(),

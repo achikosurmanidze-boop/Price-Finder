@@ -2,7 +2,7 @@
 
 ## რა არის მზად
 
-- Flask უსმენს `0.0.0.0:$PORT`-ს production-ზე.
+- Flask production-ზე ეშვება `gunicorn main:app --bind 0.0.0.0:$PORT` start command-ით.
 - `nixpacks.toml` აყენებს `backend/requirements.txt`-ს.
 - frontend ემსახურება backend-ის `/` route-იდან.
 - `.env` და SQLite cache არ უნდა აიტვირთოს GitHub-ზე.

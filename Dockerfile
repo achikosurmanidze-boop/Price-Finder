@@ -11,6 +11,4 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 COPY . /app
 
-WORKDIR /app/backend
-
 CMD ["sh", "-c", "gunicorn main:app --bind 0.0.0.0:${PORT:-8001} --workers 1 --threads 8 --timeout 120"]

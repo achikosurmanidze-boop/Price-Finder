@@ -1,60 +1,65 @@
-"""
-Goodwill scraper — goodwill.ge
-"""
-import re
-from bs4 import BeautifulSoup
+"""Goodwill scraper — uses Goodwill's public grocery API."""
+
+from urllib.parse import quote
+
 from .base import BaseScraper, ProductResult
 
 
-def _parse_price(text: str) -> float | None:
-    cleaned = re.sub(r"[^\d.,]", "", (text or "")).replace(",", ".")
-    try:
-        return float(cleaned)
-    except ValueError:
-        return None
+GOODWILL_TOKEN = (
+    "eyJhbGciOiJSUzI1NiIsImtpZCI6IkZmVlF4dkZYcHpJMV9CX09rZjNuMFEiLCJ0eXAiOiJKV1QifQ."
+    "eyJuYmYiOjE3NzkwMTkxNzQsImV4cCI6MjA5NDM3OTE3NCwiaXNzIjoiaHR0cHM6Ly9hcGkuZ29vZHdpbGwuZ2UvIiwiYXVkIjpbImh0dHBzOi8vYXBpLmdvb2R3aWxsLmdlL3Jlc291cmNlcyIsIkFwaSJdLCJjbGllbnRfaWQiOiJHcm9jZXJ5V2ViIiwic2NvcGUiOlsiR3JvY2VyeUFwaSJdfQ."
+    "UXVJPo0wh6tZvADbLLc7-kwwKWTn26ikjdmxORfx7fBHYsQkT5rje6S4I_rHMkNjmIT2foZ33CBZag0THQgKv6Qi8m_PvqgBDJ57tsWun_zGYpSciKUKJF2R_EiPhMHYFEqAZnkChWpt_n95NGf4SMIhAjfumCa4RPcfoijJj3ZYmwI_8Fut3JRrOmijLDDa2Uep_VrHpNVHHjO92QhfUxoPNdw9BUJ1jvjcvhlUTXM0l2CWgZop9Nqnu0nOP80AtP2_Gg7F_5OUyJqWCDzAf0_-hpYD6pdRIX5Israj-OfXuud2w7333iFYV2hGdtT4MTOUHOkmCxYlus_G8jOEdQ"
+)
+
+GOODWILL_HEADERS = {
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "ka",
+    "Authorization": f"Bearer {GOODWILL_TOKEN}",
+    "Origin": "https://goodwill.ge",
+    "OS": "web",
+    "Referer": "https://goodwill.ge/",
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+    ),
+}
 
 
 class GoodwillScraper(BaseScraper):
     store_name = "Goodwill"
     base_url = "https://goodwill.ge"
-    search_url = "https://goodwill.ge/search"
+    api_url = "https://api.goodwill.ge/v1/Products"
 
     def _search(self, query: str) -> list[ProductResult]:
-        resp = self._get(self.search_url, params={"q": query})
+        resp = self._get(
+            self.api_url,
+            params={"ShopId": 1, "Name": query, "Limit": 50},
+            headers=GOODWILL_HEADERS,
+        )
         if resp.status_code != 200:
             return []
 
-        soup = BeautifulSoup(resp.text, "html.parser")
         results = []
+        data = resp.json()
 
-        cards = soup.select(".product, .product-item, .catalog-item, [class*='product']")
-
-        for card in cards[:10]:
+        for item in data.get("products", [])[:20]:
             try:
-                name_el = card.select_one("h2, h3, .name, .product-name, [class*='title']")
-                if not name_el:
-                    continue
-                name = name_el.get_text(strip=True)
-
-                price_el = card.select_one(".price, .current-price, [class*='price']")
-                if not price_el:
-                    continue
-                current = _parse_price(price_el.get_text(strip=True))
-                if not current:
+                name = (item.get("name") or "").strip()
+                current = float(item.get("price") or 0)
+                if not name or current <= 0:
                     continue
 
-                old_el = card.select_one(".old-price, del, s, [class*='old']")
-                original = _parse_price(old_el.get_text(strip=True)) if old_el else None
+                original = item.get("previousPrice") or item.get("preSalePrice")
+                original = float(original) if original else None
                 discount = None
                 if original and original > current:
                     discount = round((1 - current / original) * 100, 1)
 
-                link = card.select_one("a")
-                href = link.get("href", "") if link else ""
-                url = (self.base_url + href) if href.startswith("/") else (href or self.search_url)
-
-                img = card.select_one("img")
-                image_url = (img.get("src") or img.get("data-src")) if img else None
+                product_id = item.get("id")
+                url_name = quote(name.replace("/", " "), safe="")
+                product_url = f"{self.base_url}/shop/1/product/{product_id}-{url_name}"
+                in_stock = (item.get("storageQuantity") or 0) > 0
 
                 results.append(ProductResult(
                     store_name=self.store_name,
@@ -62,8 +67,9 @@ class GoodwillScraper(BaseScraper):
                     current_price=current,
                     original_price=original,
                     discount_percent=discount,
-                    product_url=url,
-                    image_url=image_url,
+                    product_url=product_url,
+                    image_url=item.get("imageUrl"),
+                    in_stock=in_stock,
                 ))
             except Exception:
                 continue

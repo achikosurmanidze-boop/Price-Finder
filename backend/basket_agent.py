@@ -118,7 +118,7 @@ def _call_claude(prompt: str) -> str:
     resp = httpx.post(
         ANTHROPIC_API_URL,
         headers={
-            "x-api-key": os.environ["ANTHROPIC_API_KEY"],
+            "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         },
@@ -131,6 +131,11 @@ def _call_claude(prompt: str) -> str:
     )
     resp.raise_for_status()
     return resp.json()["content"][0]["text"]
+
+
+def _has_valid_api_key() -> bool:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    return key.startswith("sk-ant-") and len(key) > 40 and "ჩაწერე" not in key
 
 
 def _extract_json(text: str) -> dict:
@@ -185,5 +190,17 @@ def run_basket_agent(items: list[str]) -> dict:
         items_list=items_list, n_items=len(items)
     ) + f"\n\nScraped results per item:\n{payload}"
 
-    text = _call_claude(prompt)
-    return _extract_json(text)
+    if not _has_valid_api_key():
+        print("[basket_agent] No valid API key — returning raw results")
+        return {"per_item": [], "basket_comparison": [], "best_single_store": None,
+                "best_single_total": None, "split_strategy": [], "split_total": None,
+                "summary": "Anthropic API გასაღები არ არის დაყენებული — კალათის AI ანალიზი დროებით მიუწვდომელია."}
+
+    try:
+        text = _call_claude(prompt)
+        return _extract_json(text)
+    except Exception as exc:
+        print(f"[basket_agent] Claude call failed ({exc}) — returning raw results")
+        return {"per_item": [], "basket_comparison": [], "best_single_store": None,
+                "best_single_total": None, "split_strategy": [], "split_total": None,
+                "summary": "შეცდომა — სცადეთ ხელახლა."}

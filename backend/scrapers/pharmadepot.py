@@ -1,19 +1,19 @@
 """
-GPC.ge scraper — Next.js SSR pharmacy/general store.
-Products are server-rendered with microdata price attributes.
+Pharmadepot.ge scraper — same Next.js SSR platform as GPC.ge.
+Supports discounted prices via text-oldprice elements.
 """
 import re
 import httpx
 from .base import BaseScraper, ProductResult, REQUEST_TIMEOUT, HEADERS
 
 
-class GpcScraper(BaseScraper):
-    store_name = "GPC"
-    base_url   = "https://gpc.ge"
+class PharmadepotScraper(BaseScraper):
+    store_name = "Pharmadepot"
+    base_url   = "https://pharmadepot.ge"
 
     def _search(self, query: str) -> list[ProductResult]:
         r = httpx.get(
-            f"{self.base_url}/ka/search",
+            f"{self.base_url}/search",
             params={"keyword": query},
             headers=HEADERS,
             timeout=REQUEST_TIMEOUT,
@@ -25,24 +25,26 @@ class GpcScraper(BaseScraper):
 
 
 def _parse(html: str) -> list[ProductResult]:
-    # Each product card is an anchor:
-    # <a hrefLang="ka" href="/ka/details/...?product=ID">
-    #   <img alt="{product name}" ...>
-    #   <div class="text-16 font-medium ...">product name</div>
+    # <a hrefLang="..." href="/ka/details/...?product=ID">
+    #   <img alt="{name}" ...>
     #   <div ... content="{price}">N.NN<span itemProp="priceCurrency">₾</span></div>
+    #   <div class="...text-oldprice...">N.NN<!-- -->₾</div>  (optional)
     # </a>
 
-    card_pattern = re.compile(
-        r'<a[^>]+hrefLang="ka"[^>]+href="(/ka/details/[^"]+)"[^>]*>(.*?)</a>',
+    card_re = re.compile(
+        r'<a[^>]+hrefLang[^>]+href="(/[^"]+)"[^>]*>(.*?)</a>',
         re.DOTALL,
     )
     price_re = re.compile(
         r'content="([\d\.]+)"[^>]*>[\d\.]+<span[^>]*itemProp="priceCurrency">₾'
     )
+    old_re = re.compile(
+        r'class="[^"]*text-oldprice[^"]*"[^>]*>([\d\.]+)<!--'
+    )
     name_re = re.compile(r'<img[^>]+alt="([^"]{3,120})"')
 
     results = []
-    for m in card_pattern.finditer(html):
+    for m in card_re.finditer(html):
         href, card_html = m.group(1), m.group(2)
 
         price_m = price_re.search(card_html)
@@ -57,16 +59,27 @@ def _parse(html: str) -> list[ProductResult]:
         if not name_m:
             continue
         name = name_m.group(1).strip()
-        if not name or name.lower().startswith("cart"):
+        if not name:
             continue
 
-        url = "https://gpc.ge" + href
+        old_m = old_re.search(card_html)
+        original = None
+        discount = None
+        if old_m:
+            try:
+                original = float(old_m.group(1))
+                if original > price:
+                    discount = round((1 - price / original) * 100, 1)
+            except ValueError:
+                pass
+
+        url = "https://pharmadepot.ge" + href
         results.append(ProductResult(
-            store_name="GPC",
+            store_name="Pharmadepot",
             product_name=name,
             current_price=price,
-            original_price=None,
-            discount_percent=None,
+            original_price=original,
+            discount_percent=discount,
             product_url=url,
             image_url=None,
             in_stock=True,

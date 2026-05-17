@@ -64,8 +64,8 @@ class BaseScraper:
     def _search(self, query: str) -> list:
         raise NotImplementedError
 
-    def _get(self, url: str, params: dict = None):
+    def _get(self, url: str, params: dict = None, headers: dict = None):
         return httpx.get(
-            url, params=params, headers=HEADERS,
+            url, params=params, headers=headers or HEADERS,
             timeout=REQUEST_TIMEOUT, follow_redirects=True,
         )

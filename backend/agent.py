@@ -45,11 +45,12 @@ Analyze the results and return ONLY valid JSON (no markdown, no extra text):
 }}
 
 Rules:
-- Keep ALL results from the raw data (do not drop any store).
+- IMPORTANT: Only include results that are actually relevant to the query "{query}". Remove products that have nothing to do with the search term.
+- Do not keep a result just because the query appears as a flavor, scent, color, accessory, or marketing word. For drink/food brand queries such as "cola" or "coca-cola", keep beverages and food/candy, but exclude toothpaste, lip balm, cosmetics, accessories, and unrelated medical supplies unless explicitly requested.
 - Results must be ordered cheapest first by current_price.
 - discount_percent and original_price may be null.
 - summary must be in Georgian language.
-- If no results, return empty results array and explain in summary why."""
+- If no relevant results found, return empty results array and explain in Georgian that the searched product was not found in the available stores."""
 
 
 def _scrape_store(scraper, query: str) -> list[dict]:
@@ -89,13 +90,13 @@ def _call_claude(prompt: str) -> str:
     resp = httpx.post(
         ANTHROPIC_API_URL,
         headers={
-            "x-api-key": os.environ["ANTHROPIC_API_KEY"],
+            "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         },
         json={
             "model": MODEL,
-            "max_tokens": 2048,
+            "max_tokens": 4096,
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=CLAUDE_TIMEOUT,
@@ -121,33 +122,76 @@ def _extract_json(text: str) -> dict:
     return {"results": [], "summary": text}
 
 
+def _has_valid_api_key() -> bool:
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
+    return key.startswith("sk-ant-") and len(key) > 40 and "ჩაწერე" not in key
+
+
+def _fallback_filter_relevant(query: str, raw: list[dict]) -> list[dict]:
+    """Conservative fallback for no-Claude mode; never blocks cross-language searches."""
+    words = re.findall(r"[a-z0-9]+", query.lower())
+    if not words:
+        return raw
+
+    matches = []
+    for result in raw:
+        name = (result.get("product_name") or "").lower()
+        ascii_name = " ".join(re.findall(r"[a-z0-9]+", name))
+        if ascii_name and all(word in ascii_name for word in words):
+            matches.append(result)
+
+    return matches or raw
+
+
+def _simple_result(query: str, raw: list[dict]) -> dict:
+    """Return sorted results without Claude when no API key is available."""
+    raw = _fallback_filter_relevant(query, raw)
+    results = sorted(raw, key=lambda x: x.get("current_price") or float("inf"))
+    if results:
+        cheapest = results[0]
+        summary = (
+            f"'{query}' — {len(results)} შედეგი. "
+            f"ყველაზე იაფია {cheapest.get('store_name','')}: "
+            f"{cheapest.get('current_price','')}₾"
+        )
+    else:
+        summary = f"'{query}' — შედეგი ვერ მოიძებნა."
+    return {"results": results, "summary": summary}
+
+
 def run_agent(query: str) -> dict:
     """
     Returns {"results": [...], "summary": "..."}.
-    Target: ≤ 15 seconds total.
+    Scraping always runs. Claude ranking is optional — falls back gracefully.
     """
     print(f"\n[agent] Searching: {query!r}")
 
-    # Step 1: parallel scraping
+    # Step 1: parallel scraping (no API key needed)
     raw = _scrape_all_parallel(query)
     print(f"[agent] Total raw results: {len(raw)}")
 
     if not raw:
-        # No scraper returned anything — Claude gives a helpful message
-        no_result_text = _call_claude(
-            f'The query was: "{query}". No Georgian store returned results. '
-            f'Return JSON: {{"results":[],"summary":"<Georgian explanation that product was not found, suggest alternatives>"}}'
-        )
-        return _extract_json(no_result_text)
+        return {"results": [], "summary": f"'{query}' — ვერ მოიძებნა. ჩვენი მაღაზიები (Extra.ge, GPC.ge, Pharmadepot.ge) ძირითადად ფარმაციისა და სამედიცინო საქონლის სპეციალისტია."}
 
-    # Step 2: single Claude call to rank + summarize
-    # Send at most 30 results to keep the prompt short and Claude fast
-    payload = json.dumps(raw[:30], ensure_ascii=False, indent=None)
-    prompt = RANK_PROMPT.format(query=query) + f"\n\nRaw results:\n{payload}"
+    # Step 2: Claude ranking (optional — skip if key missing/invalid)
+    if not _has_valid_api_key():
+        print("[agent] No valid API key — returning sorted results")
+        return _simple_result(query, raw)
 
-    text = _call_claude(prompt)
-    result = _extract_json(text)
-
-    # Guarantee sort order (Claude should do it, but double-check)
-    result["results"].sort(key=lambda x: x.get("current_price") or float("inf"))
-    return result
+    try:
+        # Balanced sample: up to 7 per store, strip image_url to keep prompt small
+        by_store: dict[str, list] = {}
+        for r in raw:
+            by_store.setdefault(r["store_name"], []).append(r)
+        balanced = [r for store_items in by_store.values() for r in store_items[:7]]
+        slim = [{k: v for k, v in r.items() if k != "image_url"} for r in balanced]
+        payload = json.dumps(slim, ensure_ascii=False, indent=None)
+        prompt = RANK_PROMPT.format(query=query) + f"\n\nRaw results:\n{payload}"
+        text = _call_claude(prompt)
+        result = _extract_json(text)
+        result["results"].sort(key=lambda x: x.get("current_price") or float("inf"))
+        print(f"[agent] Done — {len(result.get('results', []))} results")
+        return result
+    except Exception as exc:
+        print(f"[agent] Claude failed ({exc}) — returning sorted results")
+        return _simple_result(query, raw)

@@ -1,11 +1,12 @@
-"""Quick API test — runs against localhost:8000. Start the server first."""
+"""Quick API test — runs against localhost:8001 by default. Start the server first."""
+import os
 import sys
 import time
 import urllib.request
 import urllib.error
 import json
 
-BASE = "http://localhost:8000"
+BASE = os.getenv("API_BASE", "http://localhost:8001")
 OK = 0
 FAIL = 0
 

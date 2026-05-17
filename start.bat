@@ -17,7 +17,10 @@ if not exist "backend\.env" (
 )
 
 echo [1/3] პაკეტების შემოწმება...
-py -m pip install -r backend\requirements.txt --quiet
+set "PYTHON_CMD=py"
+py --version >nul 2>nul
+if errorlevel 1 set "PYTHON_CMD=C:\Users\user\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+"%PYTHON_CMD%" -m pip install -r backend\requirements.txt --quiet
 
 if not exist "backend\site_status.json" (
     echo.
@@ -25,7 +28,7 @@ if not exist "backend\site_status.json" (
     echo       ^(ეს ერთხელ ხდება, შემდეგ ჩაიწერება^)
     echo.
     cd backend
-    py diagnostic.py
+    "%PYTHON_CMD%" diagnostic.py
     cd ..
 ) else (
     echo [2/3] საიტის სტატუსი უკვე შემოწმებულია ^(site_status.json^)
@@ -34,7 +37,7 @@ if not exist "backend\site_status.json" (
 echo.
 echo [3/3] სერვერის გაშვება...
 echo.
-echo   API:       http://localhost:8000
+echo   API:       http://localhost:8001
 echo   ფრონტენდი: frontend\index.html ^(გახსენი ბრაუზერით^)
 echo   Crawler:   ყოველ 5 წუთში ავტომატურად განახლდება
 echo.
@@ -42,4 +45,4 @@ echo სერვერის გასაჩერებლად: Ctrl+C
 echo.
 
 cd backend
-py main.py
+"%PYTHON_CMD%" main.py

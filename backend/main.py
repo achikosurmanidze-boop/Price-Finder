@@ -6,6 +6,11 @@ Flask backend — ქართული ფასების შედარე
 import json
 import os
 import sqlite3
+import sys
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 import time
 from threading import Lock
 
@@ -13,7 +18,8 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 
-load_dotenv()
+BASE_DIR = os.path.dirname(__file__)
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 from agent import run_agent
 from basket_agent import run_basket_agent
@@ -23,7 +29,7 @@ from scrapers import ALL_SCRAPERS
 app = Flask(__name__, static_folder=None)
 CORS(app)
 
-DB_PATH       = os.path.join(os.path.dirname(__file__), "price_cache.db")
+DB_PATH       = os.path.join(BASE_DIR, "price_cache.db")
 CACHE_DURATION = int(os.getenv("CACHE_DURATION_SECONDS", "7200"))
 _db_lock      = Lock()
 
@@ -176,13 +182,18 @@ def check_alerts_for_results(results: list) -> list:
 # Routes — Basic Search
 # ══════════════════════════════════════════════════════════════════════════════
 
-FRONTEND_PATH = os.path.join(os.path.dirname(__file__), "index.html")
+FRONTEND_PATH = os.path.join(BASE_DIR, "index.html")
 
 @app.get("/")
 def index():
     if os.path.exists(FRONTEND_PATH):
-        return send_file(FRONTEND_PATH)
+        response = send_file(FRONTEND_PATH, max_age=0)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
     return jsonify({"status": "ok", "message": "Georgian Price Finder API"}), 200
+
 
 
 @app.get("/health")
@@ -281,6 +292,15 @@ def crawl_now():
     import threading
     threading.Thread(target=c._full_cycle, daemon=True).start()
     return jsonify({"ok": True, "message": "Crawl started in background"})
+
+
+@app.post("/api/dev/clear-cache")
+def clear_cache():
+    with _db_lock:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM search_cache")
+            conn.commit()
+    return jsonify({"ok": True})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -620,9 +640,11 @@ def check_alerts():
 
 if __name__ == "__main__":
     init_db()
-    init_crawler(DB_PATH, lambda: ALL_SCRAPERS)
+    crawler_enabled = os.getenv("ENABLE_CRAWLER", "1") != "0"
+    if crawler_enabled:
+        init_crawler(DB_PATH, lambda: ALL_SCRAPERS)
 
-    port = int(os.getenv("PORT", "8000"))
+    port = int(os.getenv("PORT", "8001"))
 
     print("\n" + "=" * 52)
     print("  Georgian Price Finder - fasebis shemdarebleli")
@@ -630,7 +652,7 @@ if __name__ == "__main__":
     print(f"  API:      http://localhost:{port}")
     print(f"  Frontend: http://localhost:{port}/")
     print(f"  Scrapers: {', '.join(s.store_name for s in ALL_SCRAPERS)}")
-    print(f"  Crawler:  every 5 min, {len(ALL_SCRAPERS)} stores")
+    print(f"  Crawler:  {'every 5 min' if crawler_enabled else 'disabled'}, {len(ALL_SCRAPERS)} stores")
     print("=" * 52 + "\n")
 
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)

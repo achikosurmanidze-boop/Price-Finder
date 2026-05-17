@@ -1,0 +1,7 @@
+backend/.env
+backend/price_cache.db
+backend/site_status.json
+__pycache__/
+*.py[cod]
+.claude/
+.env

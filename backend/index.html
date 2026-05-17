@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ka">
 <head>
   <meta charset="UTF-8" />
@@ -40,7 +40,7 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 const API = (window.location.hostname==="localhost"||window.location.hostname==="127.0.0.1")
-  ? "http://localhost:8000"
+  ? `http://localhost:${window.location.port||8001}`
   : window.location.origin;
 
 const fmt = p => p!=null ? `${Number(p).toFixed(2)} ₾` : "—";
@@ -147,7 +147,7 @@ function SearchProgress({loading,isBasket}){
         <span className="text-xs text-gray-400 font-mono tabular-nums">{pct}%</span>
       </div>
       <p className="text-xs text-gray-400 mt-2 text-center">
-        {pct<55?"9 მაღაზია პარალელურად":"Claude AI აანალიზებს..."}
+        {pct<55?"3 საიტი პარალელურად":"Claude AI აანალიზებს..."}
       </p>
     </div>
   );
@@ -170,6 +170,8 @@ function ResultRow({product,rank,onAddToList,onSetAlert}){
   const cheapest=product.is_cheapest||rank===0;
   const disc=product.discount_percent>0;
   const [imgErr,setImgErr]=useState(false);
+  const type=resultType(product);
+  const typeLabel=type==="pharmacy"?"აფთიაქი":type==="grocery"?"პროდუქტი":"სხვა";
   return(
     <div className={`flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 transition group ${cheapest?'bg-emerald-50':'hover:bg-slate-50'}`}>
       {/* Thumbnail — desktop only */}
@@ -184,6 +186,7 @@ function ResultRow({product,rank,onAddToList,onSetAlert}){
         <span className={`inline-block text-xs font-bold px-2.5 py-1 rounded-lg ${cheapest?'bg-primary text-white':'bg-slate-100 text-slate-600'}`}>
           {product.store_name}
         </span>
+        <p className="text-[11px] text-gray-400 font-semibold mt-0.5 pl-0.5">{typeLabel}</p>
         {cheapest&&<p className="text-xs text-emerald-600 font-semibold mt-0.5 pl-0.5">✓ იაფი</p>}
       </div>
 
@@ -203,8 +206,9 @@ function ResultRow({product,rank,onAddToList,onSetAlert}){
 
       {/* Actions */}
       <div className="shrink-0 flex items-center gap-1">
-        <a href={product.product_url} target="_blank" rel="noopener noreferrer"
-           className={`text-xs font-bold px-3 py-2 rounded-xl transition whitespace-nowrap ${cheapest?'bg-primary text-white hover:bg-mid':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+        <a href={product.product_url}
+           onClick={e=>{e.preventDefault();const w=window.open(product.product_url,'_blank');if(!w)window.location.href=product.product_url;}}
+           className={`text-xs font-bold px-3 py-2 rounded-xl transition whitespace-nowrap cursor-pointer ${cheapest?'bg-primary text-white hover:bg-mid':'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
           ნახვა →
         </a>
         <button onClick={()=>onAddToList(product)} title="სიაში"
@@ -315,22 +319,169 @@ function BasketView({result}){
 }
 
 // ── Filter Bar ─────────────────────────────────────────────────────────────
-function FilterBar({sortBy,setSortBy,onlyDisc,setOnlyDisc}){
+const STORE_TYPES={
+  "GPC":"pharmacy",
+  "Pharmadepot":"pharmacy",
+  "Aversi":"pharmacy",
+  "PSP":"pharmacy",
+  "Ili":"pharmacy",
+  "Goodwill":"grocery",
+  "Carrefour":"grocery",
+  "Spar":"grocery",
+  "Nikora":"grocery",
+  "Smart":"grocery",
+  "Extra.ge":"other",
+};
+const TYPE_FILTERS=[
+  {key:"all",label:"ყველა"},
+  {key:"pharmacy",label:"აფთიაქი / მედიკამენტი"},
+  {key:"grocery",label:"სუპერმარკეტი / პროდუქტი"},
+  {key:"other",label:"სხვა"},
+];
+function resultType(result){
+  return STORE_TYPES[result.store_name]||"other";
+}
+function parseAmount(raw){
+  return Number(String(raw).replace(",","."));
+}
+function productMeasures(result){
+  const name=(result.product_name||"").toLowerCase();
+  const measures={weightKg:null,weightMaxKg:null,volumeL:null,volumeMaxL:null,count:null,size:null};
+
+  const unitEnd="(?=$|[\\s/,#)-])";
+
+  let match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*[-–—]\\s*(\\d+(?:[.,]\\d+)?)\\s*(კგ|kg)${unitEnd}`,"i"));
+  if(match){
+    measures.weightKg=parseAmount(match[1]);
+    measures.weightMaxKg=parseAmount(match[2]);
+  }else if((match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(კგ|kg)${unitEnd}`,"i")))){
+    measures.weightKg=parseAmount(match[1]);
+    measures.weightMaxKg=measures.weightKg;
+  }else if((match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*[-–—]\\s*(\\d+(?:[.,]\\d+)?)\\s*(გრ|გ|g)${unitEnd}`,"i")))){
+    measures.weightKg=parseAmount(match[1])/1000;
+    measures.weightMaxKg=parseAmount(match[2])/1000;
+  }else if((match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(გრ|გ|g)${unitEnd}`,"i")))){
+    measures.weightKg=parseAmount(match[1])/1000;
+    measures.weightMaxKg=measures.weightKg;
+  }
+
+  match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*[-–—]\\s*(\\d+(?:[.,]\\d+)?)\\s*(ლ|l)${unitEnd}`,"i"));
+  if(match){
+    measures.volumeL=parseAmount(match[1]);
+    measures.volumeMaxL=parseAmount(match[2]);
+  }else if((match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(ლ|l)${unitEnd}`,"i")))){
+    measures.volumeL=parseAmount(match[1]);
+    measures.volumeMaxL=measures.volumeL;
+  }else if((match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*[-–—]\\s*(\\d+(?:[.,]\\d+)?)\\s*(მლ|ml)${unitEnd}`,"i")))){
+    measures.volumeL=parseAmount(match[1])/1000;
+    measures.volumeMaxL=parseAmount(match[2])/1000;
+  }else if((match=name.match(new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(მლ|ml)${unitEnd}`,"i")))){
+    measures.volumeL=parseAmount(match[1])/1000;
+    measures.volumeMaxL=measures.volumeL;
+  }
+
+  match=name.match(/#\s*(\d+)/);
+  if(match) measures.count=Number(match[1]);
+  else{
+    match=name.match(/(\d+)\s*(ცალი|ც|pcs|piece|ტაბლეტი|კაფსულა|პაკეტი|შეფუთვა)\b/i);
+    if(match) measures.count=Number(match[1]);
+  }
+
+  match=name.match(/(?:^|[\s/,-])ზ\s*[-.:]?\s*(\d{1,2})(?=$|[\s/,-])/i);
+  if(match) measures.size=Number(match[1]);
+
+  return measures;
+}
+function rangeIntersects(minValue,maxValue,min,max){
+  if(minValue==null||Number.isNaN(minValue)) return false;
+  const hi=maxValue==null||Number.isNaN(maxValue)?minValue:maxValue;
+  return hi>=min&&minValue<=max;
+}
+
+function RangeFilter({label,unit,enabled,setEnabled,min,setMin,max,setMax,step="1"}){
   return(
-    <div className="flex flex-wrap gap-3 items-center">
-      <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
-        className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-primary">
-        <option value="price">ფასით ↑</option>
-        <option value="discount">ფასდაკლებით ↓</option>
-        <option value="store">მაღაზიით</option>
-      </select>
-      <label className="flex items-center gap-2 cursor-pointer select-none">
-        <div onClick={()=>setOnlyDisc(!onlyDisc)}
-          className={`w-11 h-6 rounded-full transition-colors relative ${onlyDisc?'bg-accent':'bg-gray-300'}`}>
-          <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${onlyDisc?'translate-x-5':'translate-x-0.5'}`}/>
-        </div>
-        <span className="text-sm font-medium text-gray-700">მხოლოდ ფასდაკლებები</span>
+    <div className={`rounded-2xl border p-3 transition ${enabled?'bg-emerald-50 border-primary/30':'bg-white border-gray-200'}`}>
+      <label className="flex items-center justify-between gap-3 mb-2 cursor-pointer select-none">
+        <span className="text-sm font-semibold text-gray-700">{label}</span>
+        <input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)} className="w-4 h-4 accent-primary"/>
       </label>
+      <div className={`grid grid-cols-2 gap-2 ${enabled?'':'opacity-45'}`}>
+        <label className="text-xs text-gray-500">
+          მინ.
+          <input type="number" min="0" max="100" step={step} value={min} disabled={!enabled}
+            onChange={e=>setMin(Math.max(0,Math.min(100,Number(e.target.value)||0)))}
+            className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white"/>
+        </label>
+        <label className="text-xs text-gray-500">
+          მაქს.
+          <input type="number" min="0" max="100" step={step} value={max} disabled={!enabled}
+            onChange={e=>setMax(Math.max(0,Math.min(100,Number(e.target.value)||0)))}
+            className="mt-1 w-full border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white"/>
+        </label>
+      </div>
+      <p className="text-xs text-gray-400 mt-2">0-100 {unit}</p>
+    </div>
+  );
+}
+
+function FilterBar({sortBy,setSortBy,onlyDisc,setOnlyDisc,typeFilter,setTypeFilter,typeCounts,measureFilters,setMeasureFilters}){
+  const setMeasure=(key,patch)=>setMeasureFilters(v=>({...v,[key]:{...v[key],...patch}}));
+  return(
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2 items-center">
+        {TYPE_FILTERS.map(f=>(
+          <button key={f.key} onClick={()=>setTypeFilter(f.key)}
+            className={`px-3 py-2 rounded-xl border text-sm font-semibold transition ${typeFilter===f.key?'bg-primary text-white border-primary shadow':'bg-white text-gray-600 border-gray-200 hover:border-primary hover:text-primary'}`}>
+            {f.label}
+            <span className={`ml-1 text-xs ${typeFilter===f.key?'text-white/75':'text-gray-400'}`}>{typeCounts[f.key]||0}</span>
+          </button>
+        ))}
+      </div>
+      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-2">
+        <RangeFilter label="გრამობა / კილოგრამობა" unit="კგ" step="0.1"
+          enabled={measureFilters.weight.enabled}
+          setEnabled={enabled=>setMeasure("weight",{enabled})}
+          min={measureFilters.weight.min}
+          setMin={min=>setMeasure("weight",{min})}
+          max={measureFilters.weight.max}
+          setMax={max=>setMeasure("weight",{max})}/>
+        <RangeFilter label="ლიტრობა" unit="ლ" step="0.1"
+          enabled={measureFilters.volume.enabled}
+          setEnabled={enabled=>setMeasure("volume",{enabled})}
+          min={measureFilters.volume.min}
+          setMin={min=>setMeasure("volume",{min})}
+          max={measureFilters.volume.max}
+          setMax={max=>setMeasure("volume",{max})}/>
+        <RangeFilter label="რაოდენობა / ცალი" unit="ცალი" step="1"
+          enabled={measureFilters.count.enabled}
+          setEnabled={enabled=>setMeasure("count",{enabled})}
+          min={measureFilters.count.min}
+          setMin={min=>setMeasure("count",{min})}
+          max={measureFilters.count.max}
+          setMax={max=>setMeasure("count",{max})}/>
+        <RangeFilter label="ზომა" unit="ზ" step="1"
+          enabled={measureFilters.size.enabled}
+          setEnabled={enabled=>setMeasure("size",{enabled})}
+          min={measureFilters.size.min}
+          setMin={min=>setMeasure("size",{min})}
+          max={measureFilters.size.max}
+          setMax={max=>setMeasure("size",{max})}/>
+      </div>
+      <div className="flex flex-wrap gap-3 items-center">
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)}
+          className="border border-gray-200 rounded-xl px-3 py-2 text-sm bg-white shadow-sm focus:ring-2 focus:ring-primary">
+          <option value="price">ფასით ↑</option>
+          <option value="discount">ფასდაკლებით ↓</option>
+          <option value="store">მაღაზიით</option>
+        </select>
+        <label className="flex items-center gap-2 cursor-pointer select-none">
+          <div onClick={()=>setOnlyDisc(!onlyDisc)}
+            className={`w-11 h-6 rounded-full transition-colors relative ${onlyDisc?'bg-accent':'bg-gray-300'}`}>
+            <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${onlyDisc?'translate-x-5':'translate-x-0.5'}`}/>
+          </div>
+          <span className="text-sm font-medium text-gray-700">მხოლოდ ფასდაკლებები</span>
+        </label>
+      </div>
     </div>
   );
 }
@@ -768,6 +919,13 @@ function App(){
   const [error,setError]=useState("");
   const [sortBy,setSortBy]=useState("price");
   const [onlyDisc,setOnlyDisc]=useState(false);
+  const [typeFilter,setTypeFilter]=useState("all");
+  const [measureFilters,setMeasureFilters]=useState({
+    weight:{enabled:false,min:0,max:100},
+    volume:{enabled:false,min:0,max:100},
+    count:{enabled:false,min:0,max:100},
+    size:{enabled:false,min:0,max:100},
+  });
 
   const [mode,setMode]=useState("search");
   const [basketInput,setBasketInput]=useState("");
@@ -821,7 +979,7 @@ function App(){
   const doSearch=useCallback(async(q)=>{
     const sq=(q||query).trim();
     if(!sq)return;
-    setQuery(sq);setLoading(true);setError("");setResults([]);setSummary("");setSource("");
+    setQuery(sq);setLoading(true);setError("");setResults([]);setSummary("");setSource("");setTypeFilter("all");
     saveHistory(sq);
     try{
       const data=await api("/api/search",{method:"POST",body:{query:sq}});
@@ -853,7 +1011,31 @@ function App(){
     refreshAlerts();alert(`✅ შეტყობინება: ${product.product_name}`);
   };
 
+  const goHome=()=>{
+    setMode("search");
+    setLoading(false);
+    setBasketLoading(false);
+    setResults([]);
+    setSummary("");
+    setSource("");
+    setError("");
+    setBasketError("");
+    setShowLists(false);
+    setShowAlerts(false);
+    setAddToListProduct(null);
+    window.scrollTo({top:0,behavior:"smooth"});
+  };
+
   const displayed=[...results]
+    .filter(r=>typeFilter==="all"||resultType(r)===typeFilter)
+    .filter(r=>{
+      const m=productMeasures(r);
+      if(measureFilters.weight.enabled&&!rangeIntersects(m.weightKg,m.weightMaxKg,measureFilters.weight.min,measureFilters.weight.max)) return false;
+      if(measureFilters.volume.enabled&&!rangeIntersects(m.volumeL,m.volumeMaxL,measureFilters.volume.min,measureFilters.volume.max)) return false;
+      if(measureFilters.count.enabled&&!rangeIntersects(m.count,m.count,measureFilters.count.min,measureFilters.count.max)) return false;
+      if(measureFilters.size.enabled&&!rangeIntersects(m.size,m.size,measureFilters.size.min,measureFilters.size.max)) return false;
+      return true;
+    })
     .filter(r=>!onlyDisc||r.discount_percent>0)
     .sort((a,b)=>{
       if(sortBy==="price")    return(a.current_price||999)-(b.current_price||999);
@@ -861,6 +1043,12 @@ function App(){
       if(sortBy==="store")    return a.store_name.localeCompare(b.store_name);
       return 0;
     });
+  const typeCounts=results.reduce((acc,r)=>{
+    const t=resultType(r);
+    acc.all=(acc.all||0)+1;
+    acc[t]=(acc[t]||0)+1;
+    return acc;
+  },{all:0,pharmacy:0,grocery:0,other:0});
 
   return(
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -870,13 +1058,13 @@ function App(){
         <div className="h-full flex items-center justify-between px-4 lg:px-6 max-w-none">
 
           {/* Logo */}
-          <div className="flex items-center gap-3">
+          <button onClick={goHome} className="flex items-center gap-3 text-left rounded-2xl focus:ring-2 focus:ring-white/40 transition" title="მთავარზე დაბრუნება">
             <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center text-lg">🛒</div>
             <div>
               <h1 className="font-bold text-base leading-tight">ფასების შემდარებელი</h1>
               <p className="text-green-300 text-xs hidden sm:block">AI • სუპერმარკეტები • აფთიაქები</p>
             </div>
-          </div>
+          </button>
 
           {/* Desktop search bar in header */}
           <div className="hidden lg:flex flex-1 max-w-xl mx-8 gap-2">
@@ -891,6 +1079,10 @@ function App(){
 
           {/* Nav buttons */}
           <div className="flex items-center gap-2">
+            <button onClick={goHome}
+              className="hidden sm:flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-xs font-semibold transition">
+              â† მთავარი
+            </button>
             {/* Mode toggle (desktop) */}
             <div className="hidden lg:flex bg-white/10 rounded-xl p-0.5 gap-0.5">
               <button onClick={()=>setMode("search")}
@@ -904,6 +1096,10 @@ function App(){
             </div>
 
             {/* Mobile: alerts + lists buttons */}
+            <button onClick={goHome}
+              className="sm:hidden bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl text-sm font-semibold transition">
+              მთავარი
+            </button>
             <button onClick={()=>{setShowAlerts(true);refreshAlerts();}}
               className="relative lg:hidden bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl transition">
               🔔
@@ -1001,7 +1197,9 @@ function App(){
                       {summary&&<p className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-2 flex-1">🤖 {summary}</p>}
                     </div>
                     <div className="flex flex-wrap gap-3 items-center justify-between mb-4">
-                      <FilterBar sortBy={sortBy} setSortBy={setSortBy} onlyDisc={onlyDisc} setOnlyDisc={setOnlyDisc}/>
+                      <FilterBar sortBy={sortBy} setSortBy={setSortBy} onlyDisc={onlyDisc} setOnlyDisc={setOnlyDisc}
+                        typeFilter={typeFilter} setTypeFilter={setTypeFilter} typeCounts={typeCounts}
+                        measureFilters={measureFilters} setMeasureFilters={setMeasureFilters}/>
                       <p className="text-sm text-gray-500">ნაპოვნია <strong>{displayed.length}</strong> შედეგი</p>
                     </div>
                     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -1113,3 +1311,4 @@ ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
+
